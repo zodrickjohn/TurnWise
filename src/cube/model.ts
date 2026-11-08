@@ -65,3 +65,20 @@ export function scramble(n = 22) {
   }
   return out.join(' ')
 }
+
+// Merge neighbouring turns of the same face (U U2 -> U') and drop turns that cancel
+export function simplify(alg: string) {
+  const out: [string, number][] = []
+  for (const m of toMoves(alg)) {
+    const n = m.endsWith('2') ? 2 : m.endsWith("'") ? 3 : 1
+    const last = out.at(-1)
+    if (last?.[0] !== m[0]) out.push([m[0], n])
+    else if (!(last[1] = (last[1] + n) % 4)) out.pop()
+  }
+  return out.map(([f, n]) => f + ['', '', '2', "'"][n]).join(' ')
+}
+
+// The same algorithm done after k whole-cube y turns, written for the original grip
+const AFTER_Y: Record<string, string> = { F: 'R', R: 'B', B: 'L', L: 'F' }
+export const relabel = (alg: string, k: number) =>
+  toMoves(alg).map(m => { let f = m[0]; for (let i = 0; i < k; i++) f = AFTER_Y[f] ?? f; return f + m.slice(1) }).join(' ')

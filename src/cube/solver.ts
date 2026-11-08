@@ -1,4 +1,4 @@
-import { NAME, PIECES, STICKERS, home, isSolved, move, toMoves, type State } from './model.ts'
+import { NAME, PIECES, SOLVED, STICKERS, home, isSolved, move, relabel, scramble, simplify, toMoves, type State } from './model.ts'
 
 export type Line = { alg: string; note: string }
 export type Chunk = { title: string; lines: Line[] }
@@ -256,4 +256,29 @@ export function diagnose(states: State[], pos: number, actual: State): Diagnosis
   for (const p of near) if (same(states[p])) return { kind: p === pos ? 'same' : 'jump', at: p }
   for (const p of near) for (const m of SINGLE) if (same(move(states[p], m))) return { kind: 'slip', at: p, wrong: m }
   return { kind: 'new', at: 0 }
+}
+
+const pick = <T,>(xs: T[]) => xs[(Math.random() * xs.length) | 0]
+const SPIN = ['U', "U'", 'U2']
+// Algorithms that scramble step k but keep every earlier step finished, and how many to mix in
+const SETUP: [string[], number][] = [
+  [[], 0], [[], 0], [["R U R' U'"], 3], [["U R U' R' U' F' U F", "U' L' U L U F U' F'"], 2],
+  [["F R U R' U' F'"], 2], [["R U R' U R U2 R' U"], 2], [["U R U' L' U R' U' L"], 2], [[], 0],
+]
+
+// Short setup moves that take a solved cube to the start of step k, for practicing on a real cube
+export function practiceSetup(k: number) {
+  for (let tries = 0; tries < 500; tries++) {
+    const [algs, n] = SETUP[k]
+    const setup = simplify(
+      k === 0 ? scramble(20)
+      : k === 1 ? `F2 R2 B2 L2 ${pick(SPIN)} ${pick(['D', "D'", 'D2', ''])}` // white edges up: a daisy
+      : k === 7 ? ((u: string) => `${reps("R' D' R D", 2)} ${u} ${reps("D' R' D R", 2)} ${u.endsWith('2') ? u : u.endsWith("'") ? 'U' : "U'"}`)(pick(SPIN)) // twist, turn top, untwist: two corners twisted opposite ways
+      : Array.from({ length: n }, () => `${relabel(pick(algs), (Math.random() * 4) | 0)} ${pick([...SPIN, ''])}`).join(' '))
+    const start = move(SOLVED, setup)
+    if (stageDone(k, start) || (k > 0 && !stageDone(k - 1, start))) continue
+    const par = toMoves(solve(start)[k].flatMap(ch => ch.lines.map(l => l.alg)).join(' ')).length
+    if (par) return { setup, start, par }
+  }
+  throw new Error('No practice setup found')
 }
