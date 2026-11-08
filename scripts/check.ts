@@ -41,3 +41,20 @@ const samples: [RGB, string][] = [[[150, 140, 30], 'y'], [[240, 225, 120], 'y'],
   [[140, 25, 35], 'r'], [[210, 60, 50], 'r'], [[250, 140, 60], 'o'], [[190, 90, 25], 'o'], [[20, 110, 60], 'g'], [[25, 55, 140], 'b']]
 for (const [rgb, c] of samples) assert.equal(classify(rgb), c, `classify(${rgb}) should be ${c}`)
 console.log('color recognition ok')
+
+// Step-done checks and the mistake detective
+import { diagnose, normalize, stageDone, timeline } from '../src/cube/solver.ts'
+{
+  const start = move(SOLVED, scramble())
+  const { moves, states } = timeline(start, solve(start))
+  const ends = [0, 1, 2, 3, 4, 5, 6, 7].map(k => moves.findLastIndex(t => t.stage <= k) + 1)
+  ends.forEach((e, k) => assert(stageDone(k, states[e]), `step ${k + 1} done at its end`))
+  assert(!stageDone(7, start) && stageDone(7, states.at(-1)!))
+  const pos = 60
+  assert.deepEqual(diagnose(states, pos, normalize(states[pos])), { kind: 'same', at: pos })
+  assert.deepEqual(diagnose(states, pos, normalize(states[pos - 7])), { kind: 'jump', at: pos - 7 })
+  const slip = diagnose(states, pos, normalize(move(states[pos + 3], "R'")))
+  assert(slip.kind === 'slip' && slip.at !== undefined && normalize(move(states[slip.at], slip.wrong!)).join('') === normalize(move(states[pos + 3], "R'")).join(''))
+  assert.equal(diagnose(states, pos, normalize(move(SOLVED, scramble()))).kind, 'new')
+  console.log('step checks and mistake detective ok')
+}

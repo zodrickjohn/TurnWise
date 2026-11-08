@@ -1,4 +1,4 @@
-import { NAME, PIECES, STICKERS, home, isSolved, move, type State } from './model.ts'
+import { NAME, PIECES, STICKERS, home, isSolved, move, toMoves, type State } from './model.ts'
 
 export type Line = { alg: string; note: string }
 export type Chunk = { title: string; lines: Line[] }
@@ -211,4 +211,49 @@ export function validate(s: State): string | null {
     seen.add(n)
   }
   return null
+}
+
+export type TimedMove = { stage: number; chunk: number; line: number; m: string }
+
+// Every move of a plan in order, tagged with where it sits, plus the cube state before each move (and after the last)
+export function timeline(start: State, plan: Chunk[][]) {
+  const moves: TimedMove[] = []
+  plan.forEach((chunks, stage) => chunks.forEach((ch, chunk) => ch.lines.forEach((l, line) => toMoves(l.alg).forEach(m => moves.push({ stage, chunk, line, m })))))
+  const states = [start]
+  moves.forEach(t => states.push(move(states.at(-1)!, t.m)))
+  return { moves, states }
+}
+
+// True once step k (0-7) of the method is complete on this cube
+export function stageDone(k: number, s: State) {
+  const bottom = count(s, crossDone) === 4 && count(s, cornerDone) === 4
+  return [
+    () => count(s, petal) === 4 || count(s, crossDone) === 4,
+    () => count(s, crossDone) === 4,
+    () => bottom,
+    () => f2l(s),
+    () => f2l(s) && topEdges.every(p => p.some(i => STICKERS[i].face === 'U' && s[i] === s[4])),
+    () => f2l(s) && topEdges.every(p => placed(s, p)),
+    () => f2l(s) && topEdges.every(p => placed(s, p)) && CORNERS.every(p => positioned(s, p)),
+    () => isSolved(s),
+  ][k]()
+}
+
+// Turn the whole cube (y) until green faces front, the way cubes are entered on the paint screen
+export function normalize(s: State) {
+  for (let k = 0; k < 4 && s[22] !== 'g'; k++) s = move(s, 'y')
+  return s
+}
+
+const SINGLE = [...'URFDLB'].flatMap(f => [f, f + "'", f + '2'])
+export type Diagnosis = { kind: 'same' | 'jump' | 'slip' | 'new'; at: number; wrong?: string }
+
+// Mistake detective: find the solve position the real cube matches, or that plus one stray turn
+export function diagnose(states: State[], pos: number, actual: State): Diagnosis {
+  const key = actual.join('')
+  const same = (s: State) => normalize(s).join('') === key
+  const near = states.map((_, p) => p).sort((a, b) => Math.abs(a - pos) - Math.abs(b - pos))
+  for (const p of near) if (same(states[p])) return { kind: p === pos ? 'same' : 'jump', at: p }
+  for (const p of near) for (const m of SINGLE) if (same(move(states[p], m))) return { kind: 'slip', at: p, wrong: m }
+  return { kind: 'new', at: 0 }
 }
