@@ -3,7 +3,7 @@ import { NAME, PIECES, SOLVED, STICKERS, cornersOnly, home, isCorner, isSolved, 
 
 export type Line = { alg: string; note: string }
 export type Chunk = { title: string; lines: Line[] }
-type Opt = Line & { fam?: string }
+export type Opt = Line & { fam?: string }
 type Pred = (s: State, p: number[]) => boolean
 
 // Teaching content for the 8 steps of the beginner's method
@@ -79,13 +79,13 @@ export const IMPOSSIBLE = "These colors describe a cube that can't exist. Usuall
 
 const ORDER = 'wyrogb'
 const pieceName = (s: State, p: number[]) => p.map(i => s[i]).sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b)).map(c => NAME[c]).join('-') + (p.length === 2 ? ' edge' : ' corner')
-const layer = (p: number[]) => STICKERS[p[0]].pos[1]
-const placed: Pred = (s, p) => p.every(i => s[i] === home(s, i))
-const EDGES = PIECES.filter(p => p.length === 2)
-const CORNERS = PIECES.filter(p => p.length === 3)
-const count = (s: State, pred: Pred) => PIECES.filter(p => pred(s, p)).length
-const f2l = (s: State) => PIECES.every(p => layer(p) === 1 || placed(s, p))
-const topEdges = EDGES.filter(p => layer(p) === 1)
+export const layer = (p: number[]) => STICKERS[p[0]].pos[1]
+export const placed: Pred = (s, p) => p.every(i => s[i] === home(s, i))
+export const EDGES = PIECES.filter(p => p.length === 2)
+export const CORNERS = PIECES.filter(p => p.length === 3)
+export const count = (s: State, pred: Pred) => PIECES.filter(p => pred(s, p)).length
+export const f2l = (s: State) => PIECES.every(p => layer(p) === 1 || placed(s, p))
+export const topEdges = EDGES.filter(p => layer(p) === 1)
 
 // Shortest sequence of options reaching goal (iterative deepening; skips repeating a family like U then U')
 function search(s: State, opts: Opt[], goal: (s: State) => boolean, max: number) {
@@ -105,12 +105,12 @@ function search(s: State, opts: Opt[], goal: (s: State) => boolean, max: number)
   throw new Error(IMPOSSIBLE)
 }
 
-const fam = (f: string, note: string, algs: string[]): Opt[] => algs.map(alg => ({ alg, note, fam: f }))
-const turns = (f: string, note: string) => fam(f, note, [f, f + "'", f + '2'])
+export const fam = (f: string, note: string, algs: string[]): Opt[] => algs.map(alg => ({ alg, note, fam: f }))
+export const turns = (f: string, note: string) => fam(f, note, [f, f + "'", f + '2'])
 const reps = (alg: string, n: number) => Array(n).fill(alg).join(' ')
 
 // Add pieces matching pred one at a time until all four are done
-function place(s: State, opts: Opt[], pred: Pred, max: number, title: (piece: string) => string, keep = (_: State) => true): [State, Chunk[]] {
+export function place(s: State, opts: Opt[], pred: Pred, max: number, title: (piece: string) => string, keep = (_: State) => true): [State, Chunk[]] {
   const chunks: Chunk[] = []
   for (let n; (n = count(s, pred)) < 4; ) {
     const before = new Set(PIECES.filter(p => pred(s, p)).map(p => pieceName(s, p)))
@@ -122,7 +122,7 @@ function place(s: State, opts: Opt[], pred: Pred, max: number, title: (piece: st
   return [s, chunks]
 }
 
-function whole(s: State, opts: Opt[], goal: (s: State) => boolean, max: number, title: string): [State, Chunk[]] {
+export function whole(s: State, opts: Opt[], goal: (s: State) => boolean, max: number, title: string): [State, Chunk[]] {
   if (goal(s)) return [s, []]
   const lines = search(s, opts, goal, max)
   return [lines.reduce((a, l) => move(a, l.alg), s), [{ title, lines }]]
@@ -192,10 +192,10 @@ function twistCorners(s: State): [State, Chunk[]] {
 }
 
 const petal: Pred = (s, p) => p.length === 2 && p.some(i => STICKERS[i].face === 'U' && s[i] === s[31])
-const crossDone: Pred = (s, p) => p.length === 2 && layer(p) === -1 && placed(s, p)
-const cornerDone: Pred = (s, p) => p.length === 3 && layer(p) === -1 && placed(s, p)
+export const crossDone: Pred = (s, p) => p.length === 2 && layer(p) === -1 && placed(s, p)
+export const cornerDone: Pred = (s, p) => p.length === 3 && layer(p) === -1 && placed(s, p)
 const midDone: Pred = (s, p) => p.length === 2 && layer(p) === 0 && placed(s, p)
-const positioned = (s: State, p: number[]) => p.map(i => s[i]).sort().join() === p.map(i => home(s, i)).sort().join()
+export const positioned = (s: State, p: number[]) => p.map(i => s[i]).sort().join() === p.map(i => home(s, i)).sort().join()
 
 const bottom2 = (s: State) => count(s, cornerDone) === 4
 const PLACE2: Opt[] = [...turns('U', 'Turn the top until at least one corner sits in its spot.'), ...YCORNERS]

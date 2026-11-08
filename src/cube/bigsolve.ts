@@ -1,7 +1,9 @@
 // Reduction method for 4×4 and 5×5: build the centers, pair the edges, then solve it like a 3×3 (with 4×4 parity fixes)
 import { bigCube, bigScramble } from './big.ts'
 import { FACES, NAME, SOLVED, cornersOnly, move, scramble, simplify, toMoves, type Size, type State } from './model.ts'
-import { IMPOSSIBLE, STAGES, STEPS, diagnose, normalize, practiceFrom, practiceSetup, prepare, stageDone, timeline, validate, type Chunk, type Diagnosis, type Line } from './solver.ts'
+import { firstLayers, ollSteps, pllSteps, planSmall, solveExpert, type Level } from './methods.ts'
+import { parities } from './twophase.ts'
+import { IMPOSSIBLE, STAGES, STEPS, f2l, diagnose, normalize, practiceFrom, practiceSetup, prepare, stageDone, timeline, validate, type Chunk, type Diagnosis, type Line } from './solver.ts'
 
 export const STAGES_BIG = [
   {
@@ -202,7 +204,7 @@ const OLL_PARITY = "Rw U2 x Rw U2 Rw U2 Rw' U2 Lw U2 Rw' U2 Rw U2 Rw' U2 Rw'"
 const PLL_PARITY = "r2 U2 r2 Uw2 r2 Uw2"
 
 // Solve a 4×4 or 5×5 by reduction; one list of chunks per stage of STAGES_BIG
-export function solveBig(start: State, N: number): Chunk[][] {
+export function solveBig(start: State, N: number, level: Level = 'beginner'): Chunk[][] {
   const k = kitOf(N), b = k.b, frame = bigCube(3)
   let s = start, f3 = frame.SOLVED
   const out: Chunk[][] = []
@@ -236,24 +238,35 @@ export function solveBig(start: State, N: number): Chunk[][] {
   const [paired, edgeChunks] = pairEdges(k, b.move(s, back))
   f3 = frame.move(f3, back); s = paired
   if (back) edgeChunks.unshift({ title: 'Back to the usual grip', lines: [{ alg: back, note: 'Turn the whole cube so yellow is on top and green faces you.' }] })
+  // Pairing turns the whole cube around; the 3×3 part starts with green in front again
+  const green = ['', 'y', "y'", 'y2'].find(y => b.move(s, y)[2 * k.A + k.mid * N + k.mid] === 'g') ?? ''
+  if (green) { s = b.move(s, green); edgeChunks.push({ title: 'Back to the usual grip', lines: [{ alg: green, note: 'Turn the whole cube so green faces you again.' }] }) }
   out.push(edgeChunks)
 
-  // The 3×3 part, step by step on the reduced cube; a 4×4 can need an edge flip (OLL parity) or swap (PLL parity)
-  for (let step = 0; step < STEPS.length; step++) {
+  // The 3×3 part on the reduced cube, the chosen level's way; a 4×4 can need an edge flip (OLL parity) or swap (PLL parity)
+  const OLL_FIX: Chunk = { title: 'Fix the flipped edge (OLL parity)', lines: [{ alg: OLL_PARITY, note: 'Only on even cubes: one top edge is flipped in a way no 3×3 move can fix. This flips it back and leaves the bottom two layers alone.' }] }
+  const PLL_FIX: Chunk = { title: 'Swap two top edges (PLL parity)', lines: [{ alg: PLL_PARITY, note: 'Only on even cubes: two top edges are swapped in a way no 3×3 move can fix. This swaps them and leaves the bottom two layers alone.' }] }
+  const fix = (chunks: Chunk[], which: 'flip' | 'swap') => { if (N % 2 === 0 && parities(reduce(k, s))[which]) { chunks.push(which === 'flip' ? OLL_FIX : PLL_FIX); s = b.move(s, which === 'flip' ? OLL_PARITY : PLL_PARITY) } }
+  const take = (chunks: Chunk[], c: Chunk[]) => { chunks.push(...c); s = b.move(s, algsOf(c)) }
+  if (level === 'intermediate') {
+    const [, cross, f2lChunks] = firstLayers(reduce(k, s)), oll: Chunk[] = [], pll: Chunk[] = []
+    s = b.move(s, algsOf([...cross, ...f2lChunks]))
+    fix(oll, 'flip'); take(oll, ollSteps(reduce(k, s), f2l, true)[1])
+    fix(pll, 'swap'); take(pll, pllSteps(reduce(k, s), f2l, true)[1])
+    out.push(cross, f2lChunks, oll, pll)
+  } else if (level === 'expert') {
+    const first: Chunk[] = []
+    fix(first, 'flip'); fix(first, 'swap') // the search needs a cube a real 3×3 could be
+    const [p1, p2] = solveExpert(reduce(k, s))
+    take(first, p1)
+    const second: Chunk[] = []
+    take(second, p2)
+    out.push(first, second)
+  } else for (let step = 0; step < STEPS.length; step++) {
     const chunks: Chunk[] = []
     const run = () => { const [, c] = STEPS[step](reduce(k, s)); chunks.push(...c); s = b.move(s, algsOf(c)) }
-    if (N % 2 === 0 && step === 4) {
-      try { STEPS[4](reduce(k, s)) } catch {
-        chunks.push({ title: 'Fix the flipped edge (OLL parity)', lines: [{ alg: OLL_PARITY, note: 'Only on even cubes: one top edge is flipped in a way no 3×3 move can fix. This flips it back and leaves the bottom two layers alone.' }] })
-        s = b.move(s, OLL_PARITY)
-      }
-    }
-    if (N % 2 === 0 && step === 5) {
-      try { let x = reduce(k, s); for (const f of STEPS.slice(5)) x = f(x)[0] } catch { // the rest of the 3×3 can't finish: swap first
-        chunks.push({ title: 'Swap two top edges (PLL parity)', lines: [{ alg: PLL_PARITY, note: 'Only on even cubes: two top edges are swapped in a way no 3×3 move can fix. This swaps them and leaves the bottom two layers alone.' }] })
-        s = b.move(s, PLL_PARITY)
-      }
-    }
+    if (step === 4) try { STEPS[4](reduce(k, s)) } catch { fix(chunks, 'flip') }
+    if (step === 5) try { let x = reduce(k, s); for (const f of STEPS.slice(5)) x = f(x)[0] } catch { fix(chunks, 'swap') } // the rest of the 3×3 can't finish: swap first
     run()
     out.push(chunks)
   }
@@ -280,7 +293,8 @@ export function validateBig(s: State, N: number): string | null {
 }
 
 // Any size: plan a solve from painted colors (2×2 and 3×3 here; 4×4 and 5×5 by reduction)
-export const prepareAny = (cube: State, size: Size) => (size > 3 ? { start: cube, plan: solveBig(cube, size) } : prepare(cube, size))
+export const prepareAny = (cube: State, size: Size, level: Level = 'beginner') =>
+  size > 3 ? { start: cube, plan: solveBig(cube, size, level) } : level === 'beginner' ? prepare(cube, size) : planSmall(cube, size, level)
 export const validateAny = (s: State, size: Size) => (size > 3 ? validateBig(s, size) : validate(s, size))
 
 // --- Practice and the mistake detective for every size. Big cubes run these in the worker ---
@@ -313,7 +327,7 @@ function bigSetup(k: number, N: number) {
 
 // Each task returns plain data, so the same code runs here or in the worker
 export type Task =
-  | { kind: 'plan'; cube: State; size: Size }
+  | { kind: 'plan'; cube: State; size: Size; level?: Level }
   | { kind: 'challenge'; step: number; size: Size }
   | { kind: 'setup'; step: number; size: Size }
   | { kind: 'from'; cube: State; step: number; size: Size }
@@ -322,7 +336,7 @@ export type Task =
 
 export function runTask(t: Task): unknown {
   const size = t.size
-  if (t.kind === 'plan') return prepareAny(t.cube, size)
+  if (t.kind === 'plan') return prepareAny(t.cube, size, t.level)
   // A cube at the start of step k: scramble, run the guide's earlier steps, and use its move count for step k as par
   if (t.kind === 'challenge') for (;;) {
     const raw = size > 3 ? bigCube(size).move(bigCube(size).SOLVED, bigScramble()) : move(SOLVED, scramble())

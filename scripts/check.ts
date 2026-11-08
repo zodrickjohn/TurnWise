@@ -173,3 +173,27 @@ import type { Chunk } from '../src/cube/solver.ts'
   assert(slip.kind === 'slip' || slip.kind === 'jump', 'a stray slice turn is found')
   console.log(`big-cube practice setups and detective ok (${((performance.now() - t0) / 1000).toFixed(1)}s)`)
 }
+
+// Levels: intermediate and expert solve every cube; expert stays within its known bounds
+import { planSmall } from '../src/cube/methods.ts'
+{
+  const t0 = performance.now(), avg: string[] = []
+  for (const [size, level, bound] of [[2, 'intermediate', 60], [2, 'expert', 11], [3, 'intermediate', 140], [3, 'expert', 24]] as const) {
+    let total = 0
+    for (let i = 0; i < 40; i++) {
+      const raw = move(SOLVED, scramble()), cube = size === 2 ? cornersOnly(raw) : raw
+      const { start, plan } = planSmall(cube, size, level)
+      const alg = plan.flat().flatMap(c => c.lines.map(l => l.alg)).join(' '), n = toMoves(alg).length
+      assert(isSolved(move(start, alg)), `${size}×${size} ${level} solves`)
+      assert(n <= bound, `${size}×${size} ${level}: ${n} moves is over ${bound}`)
+      total += n
+    }
+    avg.push(`${size}×${size} ${level} ${(total / 40).toFixed(0)}`)
+  }
+  for (const [N, level] of [[4, 'intermediate'], [4, 'expert'], [5, 'expert']] as const) {
+    const b = bigCube(N), A = N * N, mid = (N - 1) >> 1, start = b.move(b.SOLVED, bigScramble())
+    const end = b.move(start, solveBig(start, N, level).flat().flatMap(c => c.lines.map(l => l.alg)).join(' '))
+    assert(end.every((c, j) => c === end[Math.floor(j / A) * A + mid * N + mid]), `${N}×${N} ${level} solves`)
+  }
+  console.log(`levels ok (avg moves: ${avg.join(', ')}) in ${((performance.now() - t0) / 1000).toFixed(1)}s`)
+}
