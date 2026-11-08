@@ -45,7 +45,7 @@ for (const [m, [axis, layer, s]] of Object.entries(BASE)) {
 
 export const toMoves = (alg: string) => alg.split(' ').filter(Boolean)
 export const move = (s: State, alg: string) => toMoves(alg).reduce((a, m) => apply(a, PERM[m]), s)
-export const invertMove = (m: string) => (m.endsWith('2') ? m : m.endsWith("'") ? m[0] : m + "'")
+export const invertMove = (m: string) => (m.endsWith('2') ? m : m.endsWith("'") ? m.slice(0, -1) : m + "'") // works for Rw', 3Rw', r' too
 
 // Colors: white, yellow, red, orange, green, blue; '_' = not painted yet
 export const NAME: Record<string, string> = { w: 'white', y: 'yellow', r: 'red', o: 'orange', g: 'green', b: 'blue' }

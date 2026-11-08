@@ -4,6 +4,8 @@ import { SOLVED, isSolved, move, scramble, toMoves } from '../src/cube/model.ts'
 import { IMPOSSIBLE, solve, validate } from '../src/cube/solver.ts'
 
 assert(isSolved(move(SOLVED, "R U R' U' ".repeat(6))), 'trigger x6 returns to solved')
+import { invertMove } from '../src/cube/model.ts'
+assert.deepEqual(["R'", "Rw'", 'r', 'U2', "3Rw'"].map(invertMove), ['R', 'Rw', "r'", 'U2', '3Rw'], 'inverse keeps big-cube notation')
 
 const N = Number(process.argv[2] ?? 200)
 let total = 0, worst = 0
@@ -135,4 +137,39 @@ import { solveBig, validateBig } from '../src/cube/bigsolve.ts'
     console.log(`${N}×${N} ok: ${total} solves by reduction, avg ${((performance.now() - t) / runs).toFixed(0)}ms`)
   }
   assert.match(validateBig(bigCube(4).SOLVED.map((c, i) => (i ? c : '_')), 4)!, /blank/)
+}
+
+// Scanning any size: perfect in even light, and still near perfect under a warm, dim bulb (plain nearest-color misses 2-14 stickers there)
+import { classifyAll } from '../src/cube/colors.ts'
+{
+  const warm = ([r, g, b]: RGB): RGB => [Math.min(255, r * 0.8 + 25), g * 0.72, b * 0.55]
+  for (const [light, tint, noise, limit] of [['even', (c: RGB) => c, 40, 0], ['warm', warm, 24, 0.01]] as const) for (const N of [2, 3, 4, 5]) {
+    const truth = Array.from({ length: 6 * N * N }, (_, i) => 'wyrogb'[i % 6])
+    let wrong = 0
+    for (let trial = 0; trial < 20; trial++) {
+      const px = truth.map(c => (tint as (c: RGB) => RGB)(DEFAULT_REF[c]).map(v => Math.max(0, Math.min(255, v + (Math.random() - 0.5) * noise))) as RGB)
+      const mid = (N - 1) >> 1, fixed = truth.map((c, i) => (N % 2 && i % (N * N) === mid * N + mid ? c : null))
+      wrong += classifyAll(px, fixed, N * N).labels.filter((c, i) => c !== truth[i]).length
+    }
+    assert(wrong / 20 <= limit * truth.length, `${N}×${N} scan in ${light} light: ${wrong / 20} wrong per cube`)
+  }
+  console.log('scan classification ok for 2×2 to 5×5')
+}
+
+// Practice and the detective for big cubes: setups start each step with earlier steps intact; the detective sees through grips
+import { runTask, stageDoneAny } from '../src/cube/bigsolve.ts'
+import type { Chunk } from '../src/cube/solver.ts'
+{
+  const t0 = performance.now()
+  for (const [N, steps] of [[4, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]], [5, [1, 2, 3, 8]]] as const) for (const k of steps) {
+    const { start, par } = runTask({ kind: 'setup', step: k, size: N }) as { start: string[]; par: number }
+    assert(!stageDoneAny(k, start, N) && (k === 0 || stageDoneAny(k - 1, start, N)) && par > 0, `${N}×${N} setup for step ${k + 1}`)
+  }
+  const b = bigCube(4), cube = b.move(b.SOLVED, bigScramble()), { start, plan } = runTask({ kind: 'plan', cube, size: 4 }) as { start: string[]; plan: Chunk[][] }
+  const { states } = timeline(start, plan, 4)
+  const ask = (actual: string[], pos: number) => runTask({ kind: 'diagnose', start, plan, pos, actual, size: 4 }) as { kind: string; at: number; wrong?: string }
+  assert.equal(ask(b.move(states[90], 'z y'), 90).kind, 'same', 'a 4×4 held another way still matches')
+  const slip = ask(b.move(states[95], "u'"), 90)
+  assert(slip.kind === 'slip' || slip.kind === 'jump', 'a stray slice turn is found')
+  console.log(`big-cube practice setups and detective ok (${((performance.now() - t0) / 1000).toFixed(1)}s)`)
 }

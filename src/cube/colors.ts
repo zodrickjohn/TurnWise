@@ -33,3 +33,23 @@ export function average(data: Uint8ClampedArray): RGB {
   const n = data.length / 4
   return sum.map(v => Math.round(v / n)) as RGB
 }
+
+const dist = (p: RGB, q: RGB) => { const [L, A, B] = lab(p), [l, a, b] = lab(q); return ((L - l) * 0.5) ** 2 + (A - a) ** 2 + (B - b) ** 2 }
+
+// Classify many stickers at once and learn the lighting: each color's reference moves to the mean of its stickers.
+// fixed: labels already known (a fixed center). cap: no color takes more stickers than a real cube has (N² each)
+export function classifyAll(px: RGB[], fixed: (string | null)[] = [], cap = Infinity) {
+  let refs = { ...DEFAULT_REF }, labels: string[] = []
+  for (let round = 0; round < 4; round++) {
+    labels = px.map((_, i) => fixed[i] ?? '')
+    const count: Record<string, number> = Object.fromEntries(Object.keys(refs).map(c => [c, labels.filter(l => l === c).length]))
+    // Closest pairs first, so each color fills with its most certain stickers before hitting its cap
+    const pairs = px.flatMap((p, i) => (labels[i] ? [] : Object.entries(refs).map(([c, r]) => [dist(p, r), i, c] as const))).sort((a, b) => a[0] - b[0])
+    for (const [, i, c] of pairs) if (!labels[i] && count[c] < cap) { labels[i] = c; count[c]++ }
+    refs = Object.fromEntries(Object.entries(refs).map(([c, r]) => {
+      const mine = px.filter((_, i) => labels[i] === c)
+      return [c, mine.length ? ([0, 1, 2].map(k => Math.round(mine.reduce((t, p) => t + p[k], 0) / mine.length)) as RGB) : r]
+    }))
+  }
+  return { labels, refs }
+}

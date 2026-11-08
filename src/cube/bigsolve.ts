@@ -1,7 +1,7 @@
 // Reduction method for 4×4 and 5×5: build the centers, pair the edges, then solve it like a 3×3 (with 4×4 parity fixes)
-import { bigCube } from './big.ts'
-import { FACES, NAME, type Size, type State } from './model.ts'
-import { IMPOSSIBLE, STAGES, STEPS, prepare, validate, type Chunk, type Line } from './solver.ts'
+import { bigCube, bigScramble } from './big.ts'
+import { FACES, NAME, SOLVED, cornersOnly, move, scramble, simplify, toMoves, type Size, type State } from './model.ts'
+import { IMPOSSIBLE, STAGES, STEPS, diagnose, normalize, practiceFrom, practiceSetup, prepare, stageDone, timeline, validate, type Chunk, type Diagnosis, type Line } from './solver.ts'
 
 export const STAGES_BIG = [
   {
@@ -282,3 +282,93 @@ export function validateBig(s: State, N: number): string | null {
 // Any size: plan a solve from painted colors (2×2 and 3×3 here; 4×4 and 5×5 by reduction)
 export const prepareAny = (cube: State, size: Size) => (size > 3 ? { start: cube, plan: solveBig(cube, size) } : prepare(cube, size))
 export const validateAny = (s: State, size: Size) => (size > 3 ? validateBig(s, size) : validate(s, size))
+
+// --- Practice and the mistake detective for every size. Big cubes run these in the worker ---
+
+const turnOf = (size: Size) => (size > 3 ? bigCube(size).move : move)
+const algs = (chunks: Chunk[]) => chunks.flatMap(ch => ch.lines.map(l => l.alg)).join(' ')
+
+// True once step k is done; big cubes check centers and edges, then their 3×3 steps on the reduced cube
+export function stageDoneAny(k: number, s: State, size: Size): boolean {
+  if (size <= 3) return stageDone(k, s, size)
+  const kit = kitOf(size), full = (col: string) => kit.centers.some((c, f) => centerDone(kit, s, f, col))
+  const edges = () => progress(kit, s) === (size % 2 ? 24 : 12)
+  if (k === 0) return full('w')
+  if (k === 1) return full('w') && full('y')
+  if (k === 2) return allCenters(kit, s)
+  if (k === 3) return allCenters(kit, s) && edges()
+  return allCenters(kit, s) && edges() && stageDone(k - BIG_LEAD, reduce(kit, s))
+}
+
+const pick = <T,>(xs: T[]) => xs[(Math.random() * xs.length) | 0]
+// Setup moves from a solved big cube to the start of step k: each mixes only what step k builds
+function bigSetup(k: number, N: number) {
+  const T3 = ['', "'", '2']
+  if (k === 0) return bigScramble()
+  if (k === 1) return Array.from({ length: 8 }, () => { const sl = pick(['r', "l'", "r'", 'l', 'f', "b'", "f'", 'b']); return `${sl} U${pick(T3)} ${inv(sl)} ${pick(['F', 'R', 'B', 'L'])}${pick(T3)}` }).join(' ') // slice, top, slice back: the bottom center never moves
+  if (k === 2) return Array.from({ length: 10 }, () => `${pick(['u', 'd'])}${pick(T3)} ${pick(['F', 'R', 'B', 'L'])}${pick(T3)}`).join(' ') // top and bottom centers stay put
+  if (k === 3) return Array.from({ length: 3 }, () => `${pick(kitOf(N).macros).alg} ${pick(['U', 'D', 'F', 'R'])}${pick(T3)}`).join(' ') // centers stay solved
+  return practiceSetup(k - BIG_LEAD).setup // the 3×3 steps use outer turns only, which keep a reduced cube reduced
+}
+
+// Each task returns plain data, so the same code runs here or in the worker
+export type Task =
+  | { kind: 'plan'; cube: State; size: Size }
+  | { kind: 'challenge'; step: number; size: Size }
+  | { kind: 'setup'; step: number; size: Size }
+  | { kind: 'from'; cube: State; step: number; size: Size }
+  | { kind: 'chunks'; cube: State; step: number; size: Size }
+  | { kind: 'diagnose'; start: State; plan: Chunk[][]; pos: number; actual: State; size: Size }
+
+export function runTask(t: Task): unknown {
+  const size = t.size
+  if (t.kind === 'plan') return prepareAny(t.cube, size)
+  // A cube at the start of step k: scramble, run the guide's earlier steps, and use its move count for step k as par
+  if (t.kind === 'challenge') for (;;) {
+    const raw = size > 3 ? bigCube(size).move(bigCube(size).SOLVED, bigScramble()) : move(SOLVED, scramble())
+    const { start: s0, plan } = prepareAny(size === 2 ? cornersOnly(raw) : raw, size)
+    const start = plan.slice(0, t.step).reduce((s, p) => turnOf(size)(s, algs(p)), s0), par = toMoves(algs(plan[t.step])).length
+    if (par && !stageDoneAny(t.step, start, size)) return { start, par }
+  }
+  if (t.kind === 'setup') {
+    if (size <= 3) return practiceSetup(t.step, size)
+    const b = bigCube(size)
+    for (let tries = 0; tries < 50; tries++) {
+      const setup = simplify(bigSetup(t.step, size)), start = b.move(b.SOLVED, setup)
+      if (stageDoneAny(t.step, start, size) || (t.step > 0 && !stageDoneAny(t.step - 1, start, size))) continue
+      const par = toMoves(algs(solveBig(start, size)[t.step])).length
+      if (par) return { setup, start, par }
+    }
+    throw new Error('No practice setup found')
+  }
+  if (t.kind === 'from') {
+    if (size === 3) return practiceFrom(t.cube, t.step)
+    const { start: s0, plan } = prepareAny(t.cube, size)
+    const setup = algs(plan.slice(0, t.step).flat()), start = turnOf(size)(s0, setup)
+    return { setup, start, par: toMoves(algs(plan[t.step])).length }
+  }
+  // Hints for the cube as it is now: the guide's moves for this step, or null when an earlier step came undone
+  if (t.kind === 'chunks') return t.step > 0 && !stageDoneAny(t.step - 1, t.cube, size) ? null : prepareAny(t.cube, size).plan[t.step]
+  // Mistake detective: big cubes compare in every grip, since nothing fixes which way the cube is held
+  const { states } = timeline(t.start, t.plan, size)
+  if (size <= 3) return diagnose(states, t.pos, t.actual, size)
+  return diagnoseBig(states, t.pos, t.actual, size)
+}
+
+const GRIPS = ['', 'x', "x'", 'x2', 'z', "z'"].flatMap(a => ['', 'y', "y'", 'y2'].map(b => `${a} ${b}`.trim()))
+function diagnoseBig(states: State[], pos: number, actual: State, N: number): Diagnosis {
+  const b = bigCube(N), key = (s: State) => GRIPS.map(g => b.move(s, g).join('')).sort()[0]
+  const target = key(actual)
+  const near = states.map((_, p) => p).sort((x, y) => Math.abs(x - pos) - Math.abs(y - pos))
+  for (const p of near) if (key(states[p]) === target) return { kind: p === pos ? 'same' : 'jump', at: p }
+  const SINGLE = ['U', 'R', 'F', 'D', 'L', 'B', 'u', 'r', 'f', 'd', 'l', 'b'].flatMap(f => [f, f + "'", f + '2'])
+  for (const p of near.slice(0, 40)) for (const m of SINGLE) if (key(b.move(states[p], m)) === target) return { kind: 'slip', at: p, wrong: m }
+  return { kind: 'new', at: 0 }
+}
+
+// Turn a big cube to the usual grip (yellow on top, green in front) once its centers say which way that is
+export function normalizeAny(s: State, size: Size): State {
+  if (size <= 3) return size === 3 ? normalize(s) : s
+  const b = bigCube(size), c = (x: State, f: number) => x[f * size * size + ((size - 1) >> 1) * (size + 1)]
+  return GRIPS.map(g => b.move(s, g)).find(x => c(x, 0) === 'y' && c(x, 2) === 'g') ?? s
+}
