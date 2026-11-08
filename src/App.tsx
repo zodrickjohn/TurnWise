@@ -1,8 +1,8 @@
-import { useEffect, useState, type MouseEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { SOLVED, type State } from './cube/model.ts'
 import { diagnose, normalize, solve, timeline, validate, type Chunk } from './cube/solver.ts'
-import { Icon, colorName, load, save, themeTurn } from './ui.tsx'
+import { Icon, colorName, load, reduceMotion, save } from './ui.tsx'
 import Home from './views/Home.tsx'
 import Learn from './views/Learn.tsx'
 import Input from './views/Input.tsx'
@@ -49,13 +49,16 @@ export default function App() {
   }
   useEffect(() => { window.scrollTo(0, 0) }, [view])
 
-  const toggleTheme = (e: MouseEvent<HTMLButtonElement>) => {
+  // Theme switch: the whole site turns like a cube; the old theme rotates away on one face, the new one in on the next
+  const toggleTheme = () => {
+    const root = document.documentElement
+    if (root.classList.contains('theme-turn')) return
     const next: Theme = theme === 'dark' ? 'light' : 'dark'
-    const r = e.currentTarget.getBoundingClientRect()
-    themeTurn(r.x + r.width / 2, r.y + r.height / 2, next === 'dark' ? '#2f6bff' : '#ffd60a', () => {
-      document.documentElement.dataset.theme = next
-      flushSync(() => setTheme(next))
-    })
+    const apply = () => flushSync(() => { root.dataset.theme = next; setTheme(next) })
+    if (reduceMotion || !document.startViewTransition) return apply()
+    root.classList.add('theme-turn')
+    root.dataset.turn = next === 'dark' ? 'left' : 'right' // into the night turns left, back to day turns right
+    document.startViewTransition(apply).finished.finally(() => root.classList.remove('theme-turn'))
   }
 
   const openSolve = (p: Puzzle, f?: Fix, n?: string) => go('solve', () => { setPuzzle(p); setFix(f); setNotice(n); setRepair(null); setSession(x => x + 1) })
