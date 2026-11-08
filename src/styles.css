@@ -420,3 +420,13 @@ button.big-st:active { transform: scale(0.88); }
   ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 }
 .practice-steps button.on .stars i.on { background: #000; }
+
+/* Practice: mode switch, setup player, real-cube badge */
+.mode-switch { display: inline-flex; justify-self: start; padding: 4px; gap: 4px; border: var(--line); border-radius: 14px; background: var(--card); box-shadow: var(--sh-sm); }
+.mode-switch button { padding: 9px 16px; border: 0; border-radius: 10px; background: none; font-weight: 700; transition: background 0.2s var(--ease), color 0.2s; }
+.mode-switch button[aria-checked='true'] { background: var(--ink); color: var(--card); }
+.ps-badges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.real-badge { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px 1px 4px; border-radius: 999px; background: var(--g); color: #000; border: 2px solid var(--ink); font-size: 0.72rem; font-weight: 700; }
+.setup { display: grid; gap: 14px; }
+.setup .tiles { gap: 7px; }
+.setup .tile { font-size: 1rem; }

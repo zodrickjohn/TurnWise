@@ -4,10 +4,11 @@ import { DEFAULT_REF, average, classify, type RGB } from '../cube/colors.ts'
 import { HOLD, Icon, LABEL, ORDER, colorName } from '../ui.tsx'
 
 const GUIDE = 0.62 // guide square as a share of the frame's short side; CSS .scan-guide matches it
-type Props = { start: Face; onFaces: (faces: Partial<Record<Face, string[]>>, next: Face) => void; onClose: () => void }
+// finish: what the last screen says and its button (defaults to reviewing on the paint screen)
+type Props = { start: Face; onFaces: (faces: Partial<Record<Face, string[]>>, next: Face) => void; onClose: () => void; finish?: [string, string] }
 
 // Camera scanner: live per-sticker detection, calibrated by the center colors of faces already saved
-export default function Scanner({ start, onFaces, onClose }: Props) {
+export default function Scanner({ start, onFaces, onClose, finish }: Props) {
   const dialog = useRef<HTMLDialogElement>(null)
   const video = useRef<HTMLVideoElement>(null)
   const saved = useRef<Partial<Record<Face, RGB[]>>>({})
@@ -84,8 +85,8 @@ export default function Scanner({ start, onFaces, onClose }: Props) {
         </div>
       ) : done ? (
         <div className="scan-body">
-          <p>All six faces are in. The detected colors are now on the paint screen: check each face against your cube, fix any sticker that's off, then press Solve.</p>
-          <button className="btn yellow" onClick={() => dialog.current?.close()}>Review my cube <Icon name="arrow" size={18} /></button>
+          <p>{finish?.[0] ?? "All six faces are in. The detected colors are now on the paint screen: check each face against your cube, fix any sticker that's off, then press Solve."}</p>
+          <button className="btn yellow" onClick={() => dialog.current?.close()}>{finish?.[1] ?? 'Review my cube'} <Icon name="arrow" size={18} /></button>
         </div>
       ) : (
         <>
