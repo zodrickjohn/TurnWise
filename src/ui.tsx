@@ -4,6 +4,7 @@ import { Cube3D } from './cube/Cube3D.ts'
 import { FACES, NAME, SOLVED, toMoves, type Face, type Size, type State } from './cube/model.ts'
 import { SOLVED2, STAGES, STAGES2 } from './cube/solver.ts'
 import { STAGES_BIG } from './cube/bigsolve.ts'
+import { STAGES2_EXP, STAGES2_INT, STAGES_EXP, STAGES_INT, type Level } from './cube/methods.ts'
 import { bigCube } from './cube/big.ts'
 
 export const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -167,6 +168,31 @@ export const KIT: Record<Size, Kit> = {
   },
   4: bigKit(4),
   5: bigKit(5),
+}
+// The solve view's kit for a size and level: intermediate and expert swap in their own steps (big cubes keep centers and edges first)
+const INT3 = { stages: STAGES_INT, phases: [{ name: 'First two layers', steps: [0, 1], tone: 'w' }, { name: 'Last layer', steps: [2, 3], tone: 'y' }], art: [{ pattern: '_w_www_w_', view: 'Bottom' }, { pattern: '___gggggg', view: 'Front' }, { pattern: 'yyyyyyyyy', view: 'Top' }, { pattern: 'ggggggggg', view: 'Front' }] }
+const EXP3 = { stages: STAGES_EXP, phases: [{ name: 'Two-phase search', steps: [0, 1], tone: 'g' }], art: [{ pattern: '?y?yyy?y?', view: 'Top' }, { pattern: 'ggggggggg', view: 'Front' }] }
+export function kitFor(size: Size, level: Level = 'beginner'): Kit {
+  const K = KIT[size]
+  if (level === 'beginner') return K
+  if (size === 2) return level === 'expert'
+    ? { ...K, stages: STAGES2_EXP, phases: [{ name: 'Shortest solve', steps: [0], tone: 'g' }], art: [{ pattern: 'gggg', view: 'Front' }] }
+    : { ...K, stages: STAGES2_INT, phases: [{ name: 'First layer', steps: [0], tone: 'w' }, { name: 'Last layer', steps: [1, 2], tone: 'y' }], art: [{ pattern: 'wwww', view: 'Bottom' }, { pattern: 'yyyy', view: 'Top' }, { pattern: 'gggg', view: 'Front' }] }
+  const tail = level === 'expert' ? EXP3 : INT3
+  if (size === 3) return { ...K, ...tail }
+  const finish = tail.stages.map((_, i) => 4 + i)
+  return { ...K, stages: [...STAGES_BIG.slice(0, 4), ...tail.stages], art: [...K.art.slice(0, 4), ...tail.art], phases: [...K.phases.slice(0, 2), { name: 'Finish it like a 3×3', steps: finish, tone: 'y' }] }
+}
+// How each level is described, and about how many moves it takes per size (measured on random cubes)
+export const LEVEL_NAME: Record<Level, string> = { beginner: 'Beginner', intermediate: 'Intermediate', expert: 'Expert' }
+export const LEVEL_NOTE: Record<Level, string> = {
+  beginner: 'Learn every step, with why each move works.',
+  intermediate: 'Fewer, bigger steps: the method speedcubers start with.',
+  expert: 'The shortest solve the computer can find. Moves only, no lessons.',
+}
+export const LEVEL_MOVES: Record<Size, Record<Level, number>> = {
+  2: { beginner: 80, intermediate: 26, expert: 9 }, 3: { beginner: 178, intermediate: 83, expert: 20 },
+  4: { beginner: 325, intermediate: 250, expert: 180 }, 5: { beginner: 500, intermediate: 420, expert: 365 },
 }
 export const phaseOf = (step: number, phases = PHASES) => phases.findIndex(p => p.steps.includes(step))
 export const colorName = (c: string) => NAME[c] ?? 'blank'

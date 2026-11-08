@@ -3,22 +3,25 @@ import type { Cube3D } from '../cube/Cube3D.ts'
 import { invertMove, move, toMoves, type State } from '../cube/model.ts'
 import { timeline } from '../cube/solver.ts'
 import { bigCube } from '../cube/big.ts'
-import { Confetti, CubeView, Icon, KIT, Mini, Tiles, describe, faceColor, load, phaseOf, save, toTop } from '../ui.tsx'
+import { Confetti, CubeView, Icon, LEVEL_MOVES, LEVEL_NAME, Mini, Tiles, describe, faceColor, kitFor, load, phaseOf, save, toTop } from '../ui.tsx'
+import { LEVELS, type Level } from '../cube/methods.ts'
 import type { Puzzle } from '../App.tsx'
 import { Coach } from '../Coach.tsx'
 import { stickerBurst } from '../cubie.ts'
 
 const SPEEDS: [string, number][] = [['Slow', 950], ['Normal', 600], ['Fast', 320]]
 export type Fix = { at: number; wrong: string }
-type Props = { puzzle: Puzzle; again: () => void; practice: () => void; onMismatch: (expected: State, pos: number) => void; fix?: Fix; notice?: string }
+type Props = { puzzle: Puzzle; again: () => void; practice: () => void; onMismatch: (expected: State, pos: number) => void; fix?: Fix; notice?: string; onLevel: (l: Level) => Promise<unknown> | null }
 
-export default function Solve({ puzzle: { start, plan, size }, again, practice, onMismatch, fix, notice }: Props) {
-  const { stages: STAGES, phases: PHASES, art: STEP_ART } = KIT[size]
+export default function Solve({ puzzle: { start, plan, size, level }, again, practice, onMismatch, fix, notice, onLevel }: Props) {
+  const { stages: STAGES, phases: PHASES, art: STEP_ART } = kitFor(size, level)
+  const [replanning, setReplanning] = useState<Level | null>(null)
+  const switchTo = (l: Level) => { if (l === level || replanning) return; setReplanning(l); onLevel(l)?.catch(() => setReplanning(null)) }
   const last = STAGES.length - 1
   const turnState = size > 3 ? bigCube(size).move : move
   const cube = useRef<Cube3D>(null)
   const busy = useRef(false)
-  const key = start.join('')
+  const key = start.join('') + level // each level has its own moves, so its own place
   const resumed = useMemo(() => { const s = load<{ key?: string; pos?: number }>('pos', {}); return fix ? fix.at : s.key === key && Number.isInteger(s.pos) ? s.pos! : 0 }, [])
   const posRef = useRef(resumed)
   const playingRef = useRef(false)
@@ -131,6 +134,15 @@ export default function Solve({ puzzle: { start, plan, size }, again, practice, 
         })}
       </nav>
 
+      <div className="method-bar" role="radiogroup" aria-label="Method">
+        <span>Method</span>
+        {LEVELS.map(l => (
+          <button key={l} role="radio" aria-checked={l === level} disabled={!!replanning} onClick={() => switchTo(l)} title={`About ${LEVEL_MOVES[size][l]} moves`}>
+            {replanning === l ? 'Planning…' : LEVEL_NAME[l]}
+          </button>
+        ))}
+      </div>
+
       <div className="split solve">
         <aside className="stage">
           <div className="stage-card">
@@ -167,7 +179,7 @@ export default function Solve({ puzzle: { start, plan, size }, again, practice, 
               <Confetti />
               <span className="stamp">Solved</span>
               <h1>{moves.length} moves. Every one of them yours.</h1>
-              <p className="lede">That's the whole beginner's method{size !== 3 ? ` for the ${size}×${size}` : ''}. Scramble your cube and go again: this time read "What to look for" before you press play, and try to predict each move.</p>
+              <p className="lede">That's the whole {LEVEL_NAME[level].toLowerCase()} method{size !== 3 ? ` for the ${size}×${size}` : ''}. Scramble your cube and go again: this time read "What to look for" before you press play, and try to predict each move.</p>
               <div className="actions">
                 <button className="btn yellow" onClick={again}>Solve another cube <Icon name="arrow" size={18} /></button>
                 <button className="btn white" onClick={practice}>Practice a step on your own</button>

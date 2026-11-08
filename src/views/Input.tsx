@@ -3,7 +3,8 @@ import type { Cube3D } from '../cube/Cube3D.ts'
 import { FACES, SOLVED, cornersOnly, move, scramble, type Face, type Size, type State } from '../cube/model.ts'
 import { bigCube, bigScramble } from '../cube/big.ts'
 import { validateAny } from '../cube/bigsolve.ts'
-import { CubeView, Icon, KIT, LABEL, Mini, ORDER, colorName } from '../ui.tsx'
+import { CubeView, Icon, KIT, LABEL, LEVEL_MOVES, LEVEL_NAME, LEVEL_NOTE, Mini, ORDER, colorName } from '../ui.tsx'
+import { LEVELS, type Level } from '../cube/methods.ts'
 import Scanner from './Scanner.tsx'
 import { Coach } from '../Coach.tsx'
 
@@ -11,12 +12,12 @@ const PALETTE = ['w', 'y', 'r', 'o', 'g', 'b']
 
 // repair: set while checking the real cube against a solve in progress; it returns to the solve
 // setSize: switch between 3x3 and 2x2 (left out while repairing, the size is the solve's)
-type Props = { paint: State; setPaint: Dispatch<SetStateAction<State>>; blank: State; onSubmit: (s: State) => void | Promise<void>; repair?: () => void; size: Size; setSize?: (s: Size) => void }
+type Props = { paint: State; setPaint: Dispatch<SetStateAction<State>>; blank: State; onSubmit: (s: State) => void | Promise<void>; repair?: () => void; size: Size; setSize?: (s: Size) => void; level: Level; setLevel?: (l: Level) => void }
 export const faceOf = (s: State, f: Face, per = 9) => s.slice(FACES.indexOf(f) * per, FACES.indexOf(f) * per + per)
 const range = (n: number) => Array.from({ length: n }, (_, i) => i)
 const CELLS: Record<Size, number[]> = { 2: [0, 2, 6, 8], 3: range(9), 4: range(16), 5: range(25) } // positions on a face that a cube of this size has (a 2×2 lives in the 3×3 layout)
 
-export default function Input({ paint, setPaint, blank, onSubmit, repair, size, setSize }: Props) {
+export default function Input({ paint, setPaint, blank, onSubmit, repair, size, setSize, level, setLevel }: Props) {
   const K = KIT[size], cells = CELLS[size], total = K.stickers, { per, fixed } = K
   const ofFace = (f: Face) => cells.map(n => faceOf(paint, f, per)[n])
   const [planning, setPlanning] = useState(false)
@@ -81,6 +82,14 @@ export default function Input({ paint, setPaint, blank, onSubmit, repair, size, 
         {setSize && (
           <div className="mode-switch" role="radiogroup" aria-label="Cube size">
             {([2, 3, 4, 5] as const).map(n => <button key={n} role="radio" aria-checked={size === n} onClick={() => { setSize(n); setFace('F'); setError('') }}>{n}×{n}</button>)}
+          </div>
+        )}
+        {setLevel && (
+          <div className="method">
+            <div className="mode-switch" role="radiogroup" aria-label="Method">
+              {LEVELS.map(l => <button key={l} role="radio" aria-checked={level === l} onClick={() => setLevel(l)}>{LEVEL_NAME[l]}</button>)}
+            </div>
+            <p className="method-note">{LEVEL_NOTE[level]} About {LEVEL_MOVES[size][level]} moves on a {size}×{size}.</p>
           </div>
         )}
 

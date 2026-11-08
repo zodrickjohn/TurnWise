@@ -617,6 +617,14 @@ button.big-st:active { transform: scale(0.88); }
 /* Practice: mode switch, setup player, real-cube badge */
 .mode-switch { display: inline-flex; justify-self: start; padding: 4px; gap: 4px; border: var(--line); border-radius: 14px; background: var(--card); box-shadow: var(--sh-sm); }
 .practice-switches { display: flex; flex-wrap: wrap; gap: 10px; }
+.method { display: grid; gap: 8px; justify-items: start; }
+.method-note { color: var(--ink-2); font-size: 0.95rem; max-width: 46ch; }
+.method-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 14px 0 18px; }
+.method-bar span { font-weight: 700; color: var(--ink-2); margin-right: 4px; }
+.method-bar button { padding: 6px 13px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); color: var(--ink); font-weight: 700; font-size: 0.9rem; transition: background 0.2s var(--ease), color 0.2s; }
+.method-bar button[aria-checked='true'] { background: var(--ink); color: var(--card); }
+.method-bar button:disabled { opacity: 0.6; cursor: progress; }
+@media (max-width: 960px) { .method-bar { gap: 4px; } .method-bar button { padding: 5px 9px; font-size: 0.8rem; } } /* one row on phones */
 .mode-switch button { padding: 9px 16px; border: 0; border-radius: 10px; background: none; font-weight: 700; transition: background 0.2s var(--ease), color 0.2s; }
 .mode-switch button[aria-checked='true'] { background: var(--ink); color: var(--card); }
 .ps-badges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
