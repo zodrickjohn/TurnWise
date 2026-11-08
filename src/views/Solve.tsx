@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Cube3D } from '../cube/Cube3D.ts'
 import { invertMove, move, toMoves } from '../cube/model.ts'
 import { STAGES } from '../cube/solver.ts'
-import { CubeView, Icon, Mini, PHASES, STEP_ART, Tiles, describe, faceColor, phaseOf } from '../ui.tsx'
+import { CubeView, Icon, Mini, PHASES, STEP_ART, Tiles, describe, faceColor, load, phaseOf, save } from '../ui.tsx'
 import type { Puzzle } from '../App.tsx'
 
 const SPEEDS: [string, number][] = [['Slow', 950], ['Normal', 600], ['Fast', 320]]
@@ -11,9 +11,11 @@ const CONFETTI = Array.from({ length: 36 }, (_, i) => ({ c: 'wyrogb'[i % 6], x: 
 export default function Solve({ puzzle: { start, plan }, again }: { puzzle: Puzzle; again: () => void }) {
   const cube = useRef<Cube3D>(null)
   const busy = useRef(false)
-  const posRef = useRef(0)
+  const key = start.join('')
+  const resumed = useMemo(() => { const s = load<{ key?: string; pos?: number }>('pos', {}); return s.key === key && Number.isInteger(s.pos) ? s.pos! : 0 }, [])
+  const posRef = useRef(resumed)
   const playingRef = useRef(false)
-  const [pos, setPos] = useState(0)
+  const [pos, setPos] = useState(resumed)
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState(600)
 
@@ -29,6 +31,8 @@ export default function Solve({ puzzle: { start, plan }, again }: { puzzle: Puzz
     moves.forEach(t => states.push(move(states.at(-1)!, t.m)))
     return { moves, states, lineStart, colors: moves.map((t, k) => faceColor(states[k], t.m)) }
   }, [plan, start])
+  const at = Math.min(resumed, moves.length)
+  useEffect(() => save('pos', { key, pos }), [pos])
   const span = (k: number) => [moves.findIndex(t => t.stage === k), moves.findLastIndex(t => t.stage === k) + 1]
 
   const done = pos >= moves.length
@@ -111,7 +115,7 @@ export default function Solve({ puzzle: { start, plan }, again }: { puzzle: Puzz
                 </>
               )}
             </div>
-            <CubeView cubeRef={cube} initial={start} />
+            <CubeView cubeRef={cube} initial={states[at]} />
             <div className="transport">
               <button className="btn white icon" onClick={() => step(-1)} disabled={pos === 0} aria-label="Previous move (left arrow)"><Icon name="prev" /></button>
               <button className="btn yellow play" onClick={playLine} disabled={done}><Icon name={playing ? 'pause' : 'play'} /> {playing ? 'Pause' : 'Play this line'}</button>
@@ -149,7 +153,8 @@ export default function Solve({ puzzle: { start, plan }, again }: { puzzle: Puzz
                 <Mini pattern={STEP_ART[stage].pattern} label={`${STEP_ART[stage].view} face when this step is done`} />
               </header>
               <p className="lede goal">{info.goal}</p>
-              {pos === 0 && <p className="hold">Hold your cube with <b>yellow on top</b> and <b>green facing you</b>, then follow along.</p>}
+              {pos === 0 ? <p className="hold">Hold your cube with <b>yellow on top</b> and <b>green facing you</b>, then follow along.</p>
+                : pos === resumed && <p className="hold">Welcome back. Your cube is where you left it at step {stage + 1}. Make sure your real cube matches the one on screen.</p>}
               <div className="explain">
                 <section className="panel">
                   <h2>What to look for</h2>

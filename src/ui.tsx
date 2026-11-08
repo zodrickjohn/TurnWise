@@ -4,6 +4,14 @@ import { FACES, NAME, toMoves, type State } from './cube/model.ts'
 
 export const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 
+// Per-browser memory (progress survives a refresh); storage can be blocked, so failures fall back silently
+export function load<T>(key: string, fallback: T): T {
+  try { const v = localStorage.getItem('turnwise.' + key); return v === null ? fallback : JSON.parse(v) } catch { return fallback }
+}
+export function save(key: string, value: unknown) {
+  try { localStorage.setItem('turnwise.' + key, JSON.stringify(value)) } catch { /* storage unavailable */ }
+}
+
 // Mounts a Cube3D into a div and exposes it through cubeRef
 export function CubeView({ cubeRef, initial, className = '', interactive = true, follow = false }: { cubeRef: RefObject<Cube3D | null>; initial: State; className?: string; interactive?: boolean; follow?: boolean }) {
   const host = useRef<HTMLDivElement>(null)

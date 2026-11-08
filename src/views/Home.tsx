@@ -10,7 +10,7 @@ const STILL = move(SOLVED, "R U R' U' F2 L D'")
 const MARQUEE = "R U R' U' F R U R' U' F' y U R U' L' U R' U' L R' D' R D U2 F2"
 const MARQUEE_COLORS = toMoves(MARQUEE).map(m => faceColor(SOLVED, m))
 
-export default function Home({ go }: { go: (v: View) => void }) {
+export default function Home({ go, resume }: { go: (v: View) => void; resume: boolean }) {
   const cube = useRef<Cube3D>(null)
   const [demo, setDemo] = useState<{ stage: number; m: string; c: string }>({ stage: -2, m: '', c: '' })
 
@@ -56,7 +56,8 @@ export default function Home({ go }: { go: (v: View) => void }) {
             and tells you what to look for and why each move works.
           </p>
           <div className="actions">
-            <button className="btn yellow" onClick={() => go('learn')}>Start learning <Icon name="arrow" size={18} /></button>
+            {resume && <button className="btn yellow" onClick={() => go('solve')}><Icon name="play" size={18} /> Continue your solve</button>}
+            <button className={'btn ' + (resume ? 'white' : 'yellow')} onClick={() => go('learn')}>Start learning <Icon name="arrow" size={18} /></button>
             <button className="btn white" onClick={() => go('input')}>I have a scrambled cube</button>
           </div>
         </div>
