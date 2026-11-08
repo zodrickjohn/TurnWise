@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { Cube3D } from '../cube/Cube3D.ts'
 import { FACES, SOLVED, move, scramble, type Face, type State } from '../cube/model.ts'
-import { solve, validate } from '../cube/solver.ts'
+import { validate } from '../cube/solver.ts'
 import { CubeView, HOLD, Icon, LABEL, Mini, ORDER, colorName } from '../ui.tsx'
 import Scanner from './Scanner.tsx'
-import type { Puzzle } from '../App.tsx'
 
 const PALETTE = ['w', 'y', 'r', 'o', 'g', 'b']
 
-type Props = { paint: State; setPaint: Dispatch<SetStateAction<State>>; blank: State; onSolve: (p: Puzzle) => void }
+// repair: set while checking the real cube against a solve in progress; it returns to the solve
+type Props = { paint: State; setPaint: Dispatch<SetStateAction<State>>; blank: State; onSubmit: (s: State) => void; repair?: () => void }
 export const faceOf = (s: State, f: Face) => s.slice(FACES.indexOf(f) * 9, FACES.indexOf(f) * 9 + 9)
 
-export default function Input({ paint, setPaint, blank, onSolve }: Props) {
+export default function Input({ paint, setPaint, blank, onSubmit, repair }: Props) {
   const cube = useRef<Cube3D>(null)
   const [color, setColor] = useState('w')
   const [face, setFace] = useState<Face>('F')
@@ -35,7 +35,7 @@ export default function Input({ paint, setPaint, blank, onSolve }: Props) {
   const submit = () => {
     const problem = validate(paint)
     if (problem) return setError(problem)
-    try { onSolve({ start: paint, plan: solve(paint) }) } catch (e) { setError((e as Error).message) }
+    try { onSubmit(paint) } catch (e) { setError((e as Error).message) }
   }
 
   const painted = paint.filter((c, i) => c !== '_' && i % 9 !== 4).length
@@ -46,10 +46,19 @@ export default function Input({ paint, setPaint, blank, onSolve }: Props) {
   return (
     <div className="split input">
       <article className="lesson">
-        <header className="page-head">
-          <h1>Paint your cube</h1>
-          <p className="lede">Go face by face. Pick a color, then tap or drag across the stickers that match your cube. Centers are already set.</p>
-        </header>
+        {repair ? (
+          <header className="page-head repair-head">
+            <span className="detective" aria-hidden="true"><Icon name="search" size={30} /></span>
+            <h1>Let's find the slip</h1>
+            <p className="lede">We've filled in what your cube <b>should</b> look like right now. Change any sticker that's different on your real cube, or scan it. Turnwise will work out what went wrong.</p>
+            <button className="btn ghost" onClick={repair}>Back to the solve</button>
+          </header>
+        ) : (
+          <header className="page-head">
+            <h1>Paint your cube</h1>
+            <p className="lede">Go face by face. Pick a color, then tap or drag across the stickers that match your cube. Centers are already set.</p>
+          </header>
+        )}
 
         <div className="scan-callout">
           <p><b>Faster:</b> show each face to your camera and Turnwise reads the colors for you.</p>
@@ -123,7 +132,7 @@ export default function Input({ paint, setPaint, blank, onSolve }: Props) {
             {k < 5 ? (
               <button className={'btn yellow' + (faceDone ? ' nudge' : '')} onClick={() => setFace(ORDER[k + 1])}>Next: {LABEL[ORDER[k + 1]]} <Icon name="arrow" size={18} /></button>
             ) : (
-              <button className={'btn yellow' + (painted === 48 ? ' nudge' : '')} onClick={submit}>Solve my cube <Icon name="arrow" size={18} /></button>
+              <button className={'btn yellow' + (painted === 48 ? ' nudge' : '')} onClick={submit}>{repair ? 'Check my cube' : 'Solve my cube'} <Icon name="arrow" size={18} /></button>
             )}
           </div>
         </section>
@@ -134,11 +143,11 @@ export default function Input({ paint, setPaint, blank, onSolve }: Props) {
           <CubeView cubeRef={cube} initial={paint} />
           <div className="stage-actions">
             {error && <p className="error" role="alert">{error}</p>}
-            <button className="btn yellow wide" onClick={submit}>{painted < 48 ? `Solve my cube (${48 - painted} to go)` : 'Solve my cube'}</button>
-            <div className="row">
+            <button className="btn yellow wide" onClick={submit}>{repair ? 'Check my cube' : painted < 48 ? `Solve my cube (${48 - painted} to go)` : 'Solve my cube'}</button>
+            {!repair && <div className="row">
               <button className="btn white" onClick={() => { setPaint(move(SOLVED, scramble())); setError('') }}>Use a random cube</button>
               <button className="btn ghost" onClick={() => { setPaint(blank); setError(''); setFace('F') }}>Clear all</button>
-            </div>
+            </div>}
           </div>
         </div>
       </aside>

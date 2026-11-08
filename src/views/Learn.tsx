@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Cube3D } from '../cube/Cube3D.ts'
 import { SOLVED, toMoves } from '../cube/model.ts'
-import { CubeView, Icon, Tiles, describe, faceColor } from '../ui.tsx'
+import { CubeView, Icon, MovePad, Tiles, describe, faceColor } from '../ui.tsx'
 import type { View } from '../App.tsx'
 
-const ROWS: [string, string][] = [['R', 'Right'], ['L', 'Left'], ['U', 'Top'], ['D', 'Bottom'], ['F', 'Front'], ['B', 'Back'], ['y', 'Whole cube']]
 const QUIZ = ['R', "R'", 'L', "L'", 'U', "U'", 'D', "D'", 'F', "F'", 'R2', 'U2']
 const TRIGGER = "R U R' U'"
 type Quiz = { answer: string; result?: 'yes' | 'no'; guess?: string; streak: number }
@@ -42,18 +41,6 @@ export default function Learn({ go }: { go: (v: View) => void }) {
     setQuiz({ ...quiz, guess: m, result: right ? 'yes' : 'no', streak: right ? quiz.streak + 1 : 0 })
     setNow(quiz.answer)
   }
-
-  // Keyboard: letter = clockwise, Shift+letter = counter-clockwise
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || (e.target as HTMLElement).tagName === 'INPUT') return
-      const f = e.key.length === 1 ? (e.key.toLowerCase() === 'y' ? 'y' : e.key.toUpperCase()) : ''
-      if (!'RLUDFBy'.includes(f) || !f) return
-      press(f + (e.shiftKey ? "'" : ''))
-    }
-    addEventListener('keydown', key)
-    return () => removeEventListener('keydown', key)
-  })
 
   return (
     <div className="split learn">
@@ -94,16 +81,7 @@ export default function Learn({ go }: { go: (v: View) => void }) {
               : quiz.result === 'yes' ? <span className="ok">Yes, that was {quiz.answer}. {quiz.streak > 1 && `${quiz.streak} in a row!`}</span>
               : <span className="bad">Not quite: you picked {quiz.guess}, the cube did {quiz.answer}.</span>}
           </p>
-          <div className="pad" role="group" aria-label="Move keys">
-            {ROWS.map(([f, label]) => (
-              <div key={f} className="pad-row">
-                <span className="pad-label">{label}</span>
-                {[f, f + "'", f + '2'].map(m => (
-                  <button key={m} className={`tile key-btn t-${faceColor(state, m)}${now === m ? ' now' : ''}`} onClick={() => press(m)} aria-label={describe(m)}>{m}</button>
-                ))}
-              </div>
-            ))}
-          </div>
+          <MovePad state={state} now={now} onMove={press} />
           {quiz?.result && (
             <div className="actions">
               <button className="btn yellow" onClick={() => ask()}>Next move <Icon name="arrow" size={18} /></button>

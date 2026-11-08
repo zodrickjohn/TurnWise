@@ -1,34 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Cube3D } from '../cube/Cube3D.ts'
-import { invertMove, move, toMoves } from '../cube/model.ts'
-import { STAGES } from '../cube/solver.ts'
-import { CubeView, Icon, Mini, PHASES, STEP_ART, Tiles, describe, faceColor, load, phaseOf, save } from '../ui.tsx'
+import { invertMove, move, toMoves, type State } from '../cube/model.ts'
+import { STAGES, timeline } from '../cube/solver.ts'
+import { Confetti, CubeView, Icon, Mini, PHASES, STEP_ART, Tiles, describe, faceColor, load, phaseOf, save } from '../ui.tsx'
 import type { Puzzle } from '../App.tsx'
 
 const SPEEDS: [string, number][] = [['Slow', 950], ['Normal', 600], ['Fast', 320]]
-const CONFETTI = Array.from({ length: 36 }, (_, i) => ({ c: 'wyrogb'[i % 6], x: (i * 37) % 100, d: (i % 9) * 0.08, r: (i * 53) % 360 }))
+export type Fix = { at: number; wrong: string }
+type Props = { puzzle: Puzzle; again: () => void; practice: () => void; onMismatch: (expected: State, pos: number) => void; fix?: Fix; notice?: string }
 
-export default function Solve({ puzzle: { start, plan }, again }: { puzzle: Puzzle; again: () => void }) {
+export default function Solve({ puzzle: { start, plan }, again, practice, onMismatch, fix, notice }: Props) {
   const cube = useRef<Cube3D>(null)
   const busy = useRef(false)
   const key = start.join('')
-  const resumed = useMemo(() => { const s = load<{ key?: string; pos?: number }>('pos', {}); return s.key === key && Number.isInteger(s.pos) ? s.pos! : 0 }, [])
+  const resumed = useMemo(() => { const s = load<{ key?: string; pos?: number }>('pos', {}); return fix ? fix.at : s.key === key && Number.isInteger(s.pos) ? s.pos! : 0 }, [])
   const posRef = useRef(resumed)
   const playingRef = useRef(false)
   const [pos, setPos] = useState(resumed)
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState(600)
+  const [pending, setPending] = useState(fix ? invertMove(fix.wrong) : '') // a stray turn to undo before carrying on
 
-  // Flat list of every move with its stage/chunk/line, the cube state before it, and its tile color
+  // Every move with its place in the plan, the cube state before it, and its tile color
   const { moves, states, colors, lineStart } = useMemo(() => {
-    const moves: { stage: number; chunk: number; line: number; m: string }[] = []
+    const { moves, states } = timeline(start, plan)
     const lineStart = new Map<string, number>()
-    plan.forEach((chunks, stage) => chunks.forEach((ch, chunk) => ch.lines.forEach((l, line) => {
-      lineStart.set(`${stage}.${chunk}.${line}`, moves.length)
-      toMoves(l.alg).forEach(m => moves.push({ stage, chunk, line, m }))
-    })))
-    const states = [start]
-    moves.forEach(t => states.push(move(states.at(-1)!, t.m)))
+    moves.forEach((t, i) => { const k = `${t.stage}.${t.chunk}.${t.line}`; if (!lineStart.has(k)) lineStart.set(k, i) })
     return { moves, states, lineStart, colors: moves.map((t, k) => faceColor(states[k], t.m)) }
   }, [plan, start])
   const at = Math.min(resumed, moves.length)
@@ -41,7 +38,7 @@ export default function Solve({ puzzle: { start, plan }, again }: { puzzle: Puzz
 
   const step = async (dir: 1 | -1) => {
     const p = posRef.current
-    if (busy.current || (dir === 1 ? p >= moves.length : p <= 0)) return false
+    if (busy.current || pending || (dir === 1 ? p >= moves.length : p <= 0)) return false
     busy.current = true
     await cube.current?.play(dir === 1 ? moves[p].m : invertMove(moves[p - 1].m), speed)
     posRef.current = p + dir
@@ -66,8 +63,16 @@ export default function Solve({ puzzle: { start, plan }, again }: { puzzle: Puzz
     setPlaying(false)
   }
 
-  const jump = (p: number) => {
+  const playFix = async () => {
     if (busy.current) return
+    busy.current = true
+    await cube.current?.play(pending, 800)
+    busy.current = false
+    setPending('')
+  }
+
+  const jump = (p: number) => {
+    if (busy.current || pending) return
     playingRef.current = false
     posRef.current = p
     setPos(p)
@@ -108,38 +113,49 @@ export default function Solve({ puzzle: { start, plan }, again }: { puzzle: Puzz
         <aside className="stage">
           <div className="stage-card">
             <div className="now-move" aria-live="polite">
-              {done ? <p className="big-say">Solved!</p> : (
+              {pending ? (
+                <>
+                  <Tiles alg={pending} colors={[faceColor(move(states[at], fix!.wrong), pending)]} at={0} size="xl" />
+                  <p className="big-say">Fix first: {describe(pending)}</p>
+                </>
+              ) : done ? <p className="big-say">Solved!</p> : (
                 <>
                   <Tiles alg={cur.m} colors={[colors[pos]]} at={0} size="xl" key={pos} />
                   <p className="big-say">{describe(cur.m)}</p>
                 </>
               )}
             </div>
-            <CubeView cubeRef={cube} initial={states[at]} />
+            <CubeView cubeRef={cube} initial={fix ? move(states[at], fix.wrong) : states[at]} />
             <div className="transport">
-              <button className="btn white icon" onClick={() => step(-1)} disabled={pos === 0} aria-label="Previous move (left arrow)"><Icon name="prev" /></button>
-              <button className="btn yellow play" onClick={playLine} disabled={done}><Icon name={playing ? 'pause' : 'play'} /> {playing ? 'Pause' : 'Play this line'}</button>
-              <button className="btn white icon" onClick={() => step(1)} disabled={done} aria-label="Next move (right arrow)"><Icon name="next" /></button>
+              <button className="btn white icon" onClick={() => step(-1)} disabled={pos === 0 || !!pending} aria-label="Previous move (left arrow)"><Icon name="prev" /></button>
+              {pending
+                ? <button className="btn yellow play" onClick={playFix}><Icon name="undo" /> Play the fix</button>
+                : <button className="btn yellow play" onClick={playLine} disabled={done}><Icon name={playing ? 'pause' : 'play'} /> {playing ? 'Pause' : 'Play this line'}</button>}
+              <button className="btn white icon" onClick={() => step(1)} disabled={done || !!pending} aria-label="Next move (right arrow)"><Icon name="next" /></button>
             </div>
             <div className="speed" role="radiogroup" aria-label="Animation speed">
               {SPEEDS.map(([label, ms]) => <button key={label} role="radio" aria-checked={speed === ms} onClick={() => setSpeed(ms)}>{label}</button>)}
               <span className="keys"><kbd className="key">←</kbd> <kbd className="key">→</kbd> step, <kbd className="key">space</kbd> plays</span>
             </div>
+            {!done && (
+              <button className="mismatch" onClick={() => onMismatch(states[pos], pos)}>
+                <Icon name="search" size={18} /> My cube doesn't match the screen
+              </button>
+            )}
           </div>
         </aside>
 
         <article className="lesson">
           {done ? (
             <section className="finish">
-              <div className="confetti" aria-hidden="true">
-                {CONFETTI.map((p, i) => <i key={i} className={'c-' + p.c} style={{ left: p.x + '%', animationDelay: p.d + 's', rotate: p.r + 'deg' }} />)}
-              </div>
+              <Confetti />
               <span className="stamp">Solved</span>
               <h1>{moves.length} moves. Every one of them yours.</h1>
               <p className="lede">That's the whole beginner's method. Scramble your cube and go again: this time read "What to look for" before you press play, and try to predict each move.</p>
               <div className="actions">
                 <button className="btn yellow" onClick={again}>Solve another cube <Icon name="arrow" size={18} /></button>
-                <button className="btn white" onClick={() => jump(0)}><Icon name="reset" size={18} /> Replay from the start</button>
+                <button className="btn white" onClick={practice}>Practice a step on your own</button>
+                <button className="btn ghost" onClick={() => jump(0)}><Icon name="reset" size={18} /> Replay from the start</button>
               </div>
             </section>
           ) : (
@@ -153,7 +169,8 @@ export default function Solve({ puzzle: { start, plan }, again }: { puzzle: Puzz
                 <Mini pattern={STEP_ART[stage].pattern} label={`${STEP_ART[stage].view} face when this step is done`} />
               </header>
               <p className="lede goal">{info.goal}</p>
-              {pos === 0 ? <p className="hold">Hold your cube with <b>yellow on top</b> and <b>green facing you</b>, then follow along.</p>
+              {notice && pos === resumed ? <p className="hold" role="status">{notice}</p>
+                : pos === 0 ? <p className="hold">Hold your cube with <b>yellow on top</b> and <b>green facing you</b>, then follow along.</p>
                 : pos === resumed && <p className="hold">Welcome back. Your cube is where you left it at step {stage + 1}. Make sure your real cube matches the one on screen.</p>}
               <div className="explain">
                 <section className="panel">
