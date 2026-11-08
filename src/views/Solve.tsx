@@ -4,6 +4,8 @@ import { invertMove, move, toMoves, type State } from '../cube/model.ts'
 import { STAGES, timeline } from '../cube/solver.ts'
 import { Confetti, CubeView, Icon, Mini, PHASES, STEP_ART, Tiles, describe, faceColor, load, phaseOf, save } from '../ui.tsx'
 import type { Puzzle } from '../App.tsx'
+import { Coach } from '../Coach.tsx'
+import { stickerBurst } from '../cubie.ts'
 
 const SPEEDS: [string, number][] = [['Slow', 950], ['Normal', 600], ['Fast', 320]]
 export type Fix = { at: number; wrong: string }
@@ -20,6 +22,7 @@ export default function Solve({ puzzle: { start, plan }, again, practice, onMism
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState(600)
   const [pending, setPending] = useState(fix ? invertMove(fix.wrong) : '') // a stray turn to undo before carrying on
+  const [cleared, setCleared] = useState(-1) // a step just finished: Cubie celebrates it for a moment
 
   // Every move with its place in the plan, the cube state before it, and its tile color
   const { moves, states, colors, lineStart } = useMemo(() => {
@@ -45,6 +48,7 @@ export default function Solve({ puzzle: { start, plan }, again, practice, onMism
     setPos(p + dir)
     busy.current = false
     if (p + dir === moves.length) cube.current?.spin()
+    if (dir === 1 && moves[p + 1]?.stage !== moves[p].stage) celebrate(moves[p].stage)
     return true
   }
 
@@ -69,6 +73,20 @@ export default function Solve({ puzzle: { start, plan }, again, practice, onMism
     await cube.current?.play(pending, 800)
     busy.current = false
     setPending('')
+  }
+
+  // A finished step: shards burst from its progress segment and Cubie cheers
+  const cheerTimer = useRef(0)
+  const celebrate = (k: number) => {
+    const seg = document.querySelectorAll('.seg')[k]
+    if (seg) {
+      const r = seg.getBoundingClientRect()
+      stickerBurst(r.left + r.width / 2, r.top + r.height / 2, 16)
+      seg.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.12, 1.3)' }, { transform: 'scale(1)' }], { duration: 420, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' })
+    }
+    setCleared(k)
+    clearTimeout(cheerTimer.current)
+    cheerTimer.current = window.setTimeout(() => setCleared(-1), 2600)
   }
 
   const jump = (p: number) => {
@@ -112,19 +130,13 @@ export default function Solve({ puzzle: { start, plan }, again, practice, onMism
       <div className="split solve">
         <aside className="stage">
           <div className="stage-card">
-            <div className="now-move" aria-live="polite">
-              {pending ? (
-                <>
-                  <Tiles alg={pending} colors={[faceColor(move(states[at], fix!.wrong), pending)]} at={0} size="xl" />
-                  <p className="big-say">Fix first: {describe(pending)}</p>
-                </>
-              ) : done ? <p className="big-say">Solved!</p> : (
-                <>
-                  <Tiles alg={cur.m} colors={[colors[pos]]} at={0} size="xl" key={pos} />
-                  <p className="big-say">{describe(cur.m)}</p>
-                </>
-              )}
-            </div>
+            <Coach className="now-coach" size={84}
+              mood={done || cleared >= 0 ? 'cheer' : pending ? 'wow' : playing ? 'happy' : 'idle'}
+              sayKey={done ? 'done' : cleared >= 0 ? `clear-${cleared}` : pending ? 'fix' : pos}
+              say={done ? 'Solved! Every one of those turns was yours.'
+                : cleared >= 0 ? <><b>Step {cleared + 1} done!</b> {STAGES[cleared].title} is complete.{cleared < 7 && <> Up next: {STAGES[cleared + 1].title}.</>}</>
+                : pending ? <span className="say-move"><Tiles alg={pending} colors={[faceColor(move(states[at], fix!.wrong), pending)]} at={0} size="xl" /><span><b>Fix first.</b> {describe(pending)}</span></span>
+                : <span className="say-move"><Tiles alg={cur.m} colors={[colors[pos]]} at={0} size="xl" /><span>{describe(cur.m)}</span></span>} />
             <CubeView cubeRef={cube} initial={fix ? move(states[at], fix.wrong) : states[at]} />
             <div className="transport">
               <button className="btn white icon" onClick={() => step(-1)} disabled={pos === 0 || !!pending} aria-label="Previous move (left arrow)"><Icon name="prev" /></button>

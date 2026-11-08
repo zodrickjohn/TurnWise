@@ -4,6 +4,7 @@ import { FACES, SOLVED, move, scramble, type Face, type State } from '../cube/mo
 import { validate } from '../cube/solver.ts'
 import { CubeView, HOLD, Icon, LABEL, Mini, ORDER, colorName } from '../ui.tsx'
 import Scanner from './Scanner.tsx'
+import { Coach } from '../Coach.tsx'
 
 const PALETTE = ['w', 'y', 'r', 'o', 'g', 'b']
 
@@ -18,6 +19,7 @@ export default function Input({ paint, setPaint, blank, onSubmit, repair }: Prop
   const [error, setError] = useState('')
   const [scanning, setScanning] = useState(false)
   const dragging = useRef(false)
+  const [justDone, setJustDone] = useState<Face | null>(null) // a face was just completed: Cubie cheers it
 
   useEffect(() => { cube.current?.setState(paint) }, [paint])
   useEffect(() => { cube.current?.focusFace(face) }, [face])
@@ -39,6 +41,13 @@ export default function Input({ paint, setPaint, blank, onSubmit, repair }: Prop
   }
 
   const painted = paint.filter((c, i) => c !== '_' && i % 9 !== 4).length
+  const doneFaces = ORDER.filter(f => !faceOf(paint, f).includes('_'))
+  const doneCount = useRef(doneFaces.length)
+  useEffect(() => {
+    if (doneFaces.length > doneCount.current) setJustDone(doneFaces.find(f => f === face) ?? doneFaces.at(-1)!)
+    doneCount.current = doneFaces.length
+  }, [doneFaces.length])
+  useEffect(() => { if (!justDone) return; const t = setTimeout(() => setJustDone(null), 2600); return () => clearTimeout(t) }, [justDone])
   const k = ORDER.indexOf(face)
   const faceDone = !faceOf(paint, face).includes('_')
   const blanksHere = faceOf(paint, face).filter(c => c === '_').length
@@ -142,7 +151,13 @@ export default function Input({ paint, setPaint, blank, onSubmit, repair }: Prop
         <div className="stage-card">
           <CubeView cubeRef={cube} initial={paint} />
           <div className="stage-actions">
-            {error && <p className="error" role="alert">{error}</p>}
+            <Coach className="paint-coach" size={76}
+              mood={error ? 'oops' : painted === 48 ? 'cheer' : justDone ? 'cheer' : 'idle'}
+              sayKey={error || (painted === 48 ? 'all' : justDone ? `done-${justDone}-${doneFaces.length}` : 'idle')}
+              say={error ? <span role="alert">{error}</span>
+                : painted === 48 ? (repair ? "All in! Hit Check and I'll find the slip." : 'All 48 stickers in! Hit Solve when ready.')
+                : justDone ? `${LABEL[justDone]} face done! ${48 - painted} to go.`
+                : `${48 - painted} stickers to go. Tip: keys 1 to 6 switch colors.`} />
             <button className="btn yellow wide" onClick={submit}>{repair ? 'Check my cube' : painted < 48 ? `Solve my cube (${48 - painted} to go)` : 'Solve my cube'}</button>
             {!repair && <div className="row">
               <button className="btn white" onClick={() => { setPaint(move(SOLVED, scramble())); setError('') }}>Use a random cube</button>

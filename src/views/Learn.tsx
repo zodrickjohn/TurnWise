@@ -3,6 +3,7 @@ import type { Cube3D } from '../cube/Cube3D.ts'
 import { SOLVED, toMoves } from '../cube/model.ts'
 import { CubeView, Icon, MovePad, Tiles, describe, faceColor } from '../ui.tsx'
 import type { View } from '../App.tsx'
+import { Coach } from '../Coach.tsx'
 
 const QUIZ = ['R', "R'", 'L', "L'", 'U', "U'", 'D', "D'", 'F', "F'", 'R2', 'U2']
 const TRIGGER = "R U R' U'"
@@ -112,11 +113,14 @@ export default function Learn({ go }: { go: (v: View) => void }) {
       <aside className="stage">
         <div className="stage-card">
           <CubeView cubeRef={cube} initial={SOLVED} />
-          <div className="say" aria-live="polite">
-            {now && now !== '?' ? <><Tiles alg={now} colors={[faceColor(state, now)]} at={0} size="xl" /><p>{describe(now)}</p></>
-              : now === '?' ? <p className="big-q">Which move was that?</p>
-              : <p>Tap any move to see it on the cube.</p>}
-          </div>
+          <Coach className="stage-coach"
+            mood={quiz?.result === 'yes' ? 'cheer' : quiz?.result === 'no' ? 'oops' : now === '?' ? 'think' : now ? 'happy' : 'wave'}
+            sayKey={`${now}-${quiz?.result ?? ''}-${quiz?.streak ?? ''}`}
+            say={quiz?.result === 'yes' ? <span className="say-move"><Tiles alg={quiz.answer} colors={[faceColor(state, quiz.answer)]} size="lg" />{quiz.streak > 1 ? `Yes! ${quiz.streak} in a row.` : 'Yes, nailed it!'}</span>
+              : quiz?.result === 'no' ? <span className="say-move"><Tiles alg={quiz.answer} colors={[faceColor(state, quiz.answer)]} size="lg" />Close! It was this one. Watch it again?</span>
+              : now === '?' ? 'Hmm, which move was that? Pick it on the keys.'
+              : now ? <span className="say-move"><Tiles alg={now} colors={[faceColor(state, now)]} at={0} size="lg" />{describe(now)}</span>
+              : "Hi, I'm Cubie! Tap any move and I'll show it on the cube."} />
         </div>
       </aside>
     </div>

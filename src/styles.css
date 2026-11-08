@@ -295,7 +295,6 @@ button.big-st:active { transform: scale(0.88); }
 .seg-fill { position: absolute; inset: 0; background: var(--fill); transform-origin: left; transition: transform 0.45s var(--ease); }
 .seg-n { position: relative; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--card); border: 2.5px solid var(--ink); font: 800 0.72rem var(--display); }
 .solve { grid-template-columns: minmax(0, 0.95fr) minmax(0, 1fr); padding-top: 24px; }
-.now-move { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 160px; padding: 18px 20px; border-bottom: var(--line); text-align: center; }
 .big-say { font: 800 1.02rem/1.3 var(--display); letter-spacing: -0.04em; max-width: 28ch; }
 .transport { display: flex; gap: 12px; justify-content: center; padding: 18px 18px 10px; border-top: var(--line); }
 .btn.icon { width: 56px; padding: 0; height: 56px; }
@@ -383,6 +382,28 @@ button.big-st:active { transform: scale(0.88); }
 .shockwave { position: absolute; height: 22px; border-radius: 50%; border: 4px solid var(--ink); opacity: 0; }
 .shooting { position: absolute; width: 120px; height: 3px; border-radius: 2px; background: linear-gradient(90deg, transparent, #fff6c4); transform-origin: right center; filter: drop-shadow(0 0 6px #fff6c4); }
 
+/* Coach: Cubie with a speech bubble */
+.coach { display: flex; align-items: flex-end; gap: 12px; }
+.coach-cubie { flex: none; padding: 0; border: 0; background: none; cursor: pointer; transform-origin: 50% 100%; animation: breathe 3.4s ease-in-out infinite; }
+.coach-cubie svg { display: block; overflow: visible; filter: drop-shadow(calc(3px * var(--lx)) 3px 0 #0004); }
+.coach-cubie .speed-lines { display: none; }
+.coach-cubie:hover { animation-duration: 1.2s; }
+@keyframes breathe { 50% { transform: scale(1.025, 0.975); } }
+.coach-bubble {
+  position: relative; flex: 1; min-width: 0; margin-bottom: 26px; padding: 12px 16px; background: var(--card); color: var(--ink);
+  border: 3px solid var(--ink); border-radius: 16px; box-shadow: var(--sh-sm); font-weight: 700; line-height: 1.4; animation: bubble-in 0.38s var(--ease);
+}
+.coach-bubble::before { content: ''; position: absolute; left: -11px; bottom: 14px; width: 16px; height: 16px; background: var(--card); border-left: 3px solid var(--ink); border-bottom: 3px solid var(--ink); transform: rotate(45deg) skew(12deg, 12deg); }
+@keyframes bubble-in { from { transform: scale(0.85) translateX(-10px); opacity: 0; } }
+.say-move { display: flex; align-items: center; gap: 12px; }
+.say-move .tile.xl { font-size: 1.35rem; flex: none; }
+.stage-coach { padding: 14px 18px 4px; border-top: var(--line); min-height: 128px; }
+.now-coach { padding: 14px 18px 2px; border-bottom: var(--line); min-height: 118px; }
+.paint-coach { margin-bottom: 4px; }
+.hero-coach { margin-top: 30px; max-width: 34rem; }
+.hero-coach .coach-bubble { color: var(--ink); }
+.burst-layer { position: fixed; inset: 0; z-index: var(--z-overlay); pointer-events: none; }
+
 /* Mistake recovery */
 .mismatch { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 18px 16px; padding: 10px; border: 2.5px dashed color-mix(in srgb, var(--ink) 45%, transparent); border-radius: 12px; background: none; font-weight: 700; transition: background 0.2s, border-color 0.2s; }
 .mismatch:hover { border-style: solid; border-color: var(--ink); background: var(--tint); }
@@ -439,8 +460,11 @@ button.big-st:active { transform: scale(0.88); }
   .stage-card { height: auto; min-height: 0; }
   .stage-card .cube { flex: none; height: 30vh; min-height: 200px; }
   .say { min-height: 0; padding: 10px 16px 14px; }
-  .say .tile.xl, .now-move .tile.xl { font-size: 1.3rem; }
-  .now-move { flex-direction: row; min-height: 0; padding: 12px 16px; text-align: left; }
+  .stage-coach, .now-coach { min-height: 0; padding: 10px 12px 2px; }
+  .stage-coach .coach-cubie, .now-coach .coach-cubie { width: 58px !important; height: 60px !important; }
+  .coach-bubble { margin-bottom: 18px; padding: 9px 12px; font-size: 0.92rem; }
+  .say-move .tile.xl { font-size: 1.05rem; }
+  .hero-coach .coach-cubie { width: 80px !important; height: 83px !important; }
   .transport { padding: 12px 12px 8px; }
   .keys { display: none; }
   .explain { grid-template-columns: 1fr; }

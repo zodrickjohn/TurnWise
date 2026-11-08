@@ -4,6 +4,7 @@ import { FACES, SOLVED, invertMove, move, scramble, toMoves, type State } from '
 import { STAGES, practiceFrom, practiceSetup, solve, stageDone, validate } from '../cube/solver.ts'
 import { Confetti, CubeView, Icon, Mini, MovePad, STEP_ART, Tiles, describe, faceColor, load, save } from '../ui.tsx'
 import Scanner from './Scanner.tsx'
+import { Coach } from '../Coach.tsx'
 
 type Mode = 'screen' | 'real'
 const colorsAlong = (s: State, alg: string) => toMoves(alg).reduce<[State, string[]]>(([st, cs], m) => [move(st, m), [...cs, faceColor(st, m)]], [s, []])[1]
@@ -156,10 +157,10 @@ function OnScreen({ step, top, again, next, onStars }: ModeProps & { onStars: (n
       <aside className="stage">
         <div className="stage-card">
           <CubeView cubeRef={cube} initial={ch.start} />
-          <div className="say" aria-live="polite">
-            {last ? <><Tiles alg={last} colors={[faceColor(move(ch.start, seq.slice(0, -1).join(' ')), last)]} at={0} size="xl" key={seq.length} /><p>{describe(last)}</p></>
-              : <p>Your cube for step {step + 1}. Make your first move.</p>}
-          </div>
+          <Coach className="stage-coach" mood={done ? 'cheer' : last ? 'happy' : 'grit'} sayKey={done ? 'won' : seq.length}
+            say={done ? (stars === 3 ? 'Three stars! Right on the guide\'s count.' : 'Step done! Want to try for fewer moves?')
+              : last ? <span className="say-move"><Tiles alg={last} colors={[faceColor(move(ch.start, seq.slice(0, -1).join(' ')), last)]} at={0} size="lg" />{describe(last)}</span>
+              : `Your cube for step ${step + 1}. Par is ${ch.par}. You've got this!`} />
         </div>
       </aside>
     </div>
@@ -292,13 +293,12 @@ function RealCube({ step, top, again, next, painted, onVerified }: ModeProps & {
       <aside className="stage">
         <div className="stage-card">
           <CubeView cubeRef={cube} initial={ch.from} />
-          <div className="say" aria-live="polite">
-            {phase === 'setup' && !setupDone && setup.length
-              ? <><Tiles alg={setup[i]} colors={[setupColors[i]]} at={0} size="xl" key={i} /><p>{describe(setup[i])}</p></>
-              : phase === 'setup' ? <p>Your cube should now look like this. Drag to compare every side.</p>
-              : phase === 'solve' ? <p>Your starting position for step {step + 1}. Drag to look around.</p>
-              : <p>Step {step + 1} done.</p>}
-          </div>
+          <Coach className="stage-coach" mood={phase === 'won' ? 'cheer' : phase === 'solve' ? 'think' : verdict ? 'oops' : 'happy'} sayKey={`${phase}-${i}-${verdict}`}
+            say={phase === 'setup' && !setupDone && setup.length
+              ? <span className="say-move"><Tiles alg={setup[i]} colors={[setupColors[i]]} at={0} size="lg" />{describe(setup[i])}</span>
+              : phase === 'setup' ? 'Your cube should look like this now. Drag me around to compare every side.'
+              : phase === 'solve' ? (verdict ? 'Not quite yet. Keep going, you\'re close!' : `Solve step ${step + 1} in your hands. I'll wait right here.`)
+              : `Step ${step + 1} done on your real cube!`} />
         </div>
       </aside>
     </div>

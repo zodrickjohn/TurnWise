@@ -4,6 +4,7 @@ import { SOLVED, move, scramble, toMoves } from '../cube/model.ts'
 import { STAGES, solve } from '../cube/solver.ts'
 import { CubeView, Icon, Mini, PHASES, STEP_ART, Tiles, faceColor, reduceMotion } from '../ui.tsx'
 import type { View } from '../App.tsx'
+import { Coach } from '../Coach.tsx'
 
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
 const STILL = move(SOLVED, "R U R' U' F2 L D'")
@@ -60,6 +61,8 @@ export default function Home({ go, resume }: { go: (v: View) => void; resume: bo
             <button className={'btn ' + (resume ? 'white' : 'yellow')} onClick={() => go('learn')}>Start learning <Icon name="arrow" size={18} /></button>
             <button className="btn white" onClick={() => go('input')}>I have a scrambled cube</button>
           </div>
+          <Coach className="hero-coach" size={104} mood="wave" sayKey="hi"
+            say={<>Hi, I'm <b>Cubie</b>! I'll coach you through every turn. Psst: try clicking the sun up there.</>} />
         </div>
         <figure className="hero-cube">
           <CubeView cubeRef={cube} initial={reduceMotion ? STILL : SOLVED} follow />
