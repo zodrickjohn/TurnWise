@@ -29,7 +29,7 @@ export default function Solve({ puzzle: { start, plan }, again, practice, onMism
     return { moves, states, lineStart, colors: moves.map((t, k) => faceColor(states[k], t.m)) }
   }, [plan, start])
   const at = Math.min(resumed, moves.length)
-  useEffect(() => save('pos', { key, pos }), [pos])
+  useEffect(() => { save('pos', { key, pos }) }, [pos])
   const span = (k: number) => [moves.findIndex(t => t.stage === k), moves.findLastIndex(t => t.stage === k) + 1]
 
   const done = pos >= moves.length

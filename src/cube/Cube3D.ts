@@ -27,6 +27,8 @@ export class Cube3D {
   private tilt = { x: 0, y: 0, tx: 0, ty: 0 }
   private spinAt = -1
   private onPointer?: (e: PointerEvent) => void
+  private sun = new THREE.DirectionalLight('#ffffff', 1.2)
+  private dayT = -1
   private cubies: THREE.Mesh[] = []
   private stickers: THREE.Mesh[] = []
   private mats = Object.fromEntries(Object.entries(HEX).map(([k, c]) => [k, new THREE.MeshStandardMaterial({ color: c, roughness: 0.32 })]))
@@ -44,10 +46,9 @@ export class Cube3D {
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
     host.appendChild(renderer.domElement)
     scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture
-    const sun = new THREE.DirectionalLight('#ffffff', 1.2)
-    sun.position.set(3, 6, 4)
+    this.sun.position.set(3, 6, 4)
     this.rig.add(this.group)
-    scene.add(sun, this.rig)
+    scene.add(this.sun, this.rig)
     camera.position.set(5.2, 4.3, 7.4).setLength(DIST)
     camera.lookAt(0, 0, 0)
 
@@ -96,9 +97,22 @@ export class Cube3D {
       this.rig.scale.setScalar(0.6 + 0.4 * e)
       this.rig.rotation.set(t.x, (1 - e) * -2.2 + t.y + spin, 0)
       this.group.quaternion.slerp(this.target, 0.1)
+      this.light()
       this.controls?.update()
       renderer.render(scene, camera)
     })
+  }
+
+  // Match the page's time of day (CSS --t: 0 noon, 1 night)
+  private light() {
+    const t = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--t')) || 0
+    if (Math.abs(t - this.dayT) < 0.001) return
+    this.dayT = t
+    const gold = Math.sin(Math.min(1, t / 0.6) * Math.PI), dusk = Math.sin(Math.min(1, Math.max(0, (t - 0.32) / 0.6)) * Math.PI)
+    this.sun.color.setRGB(1, 1, 1).lerp(new THREE.Color(0.62, 0.72, 1), t).lerp(new THREE.Color(1, 0.62, 0.3), gold * 0.85).lerp(new THREE.Color(0.75, 0.5, 1), dusk * 0.5)
+    this.sun.intensity = 1.25 - 0.55 * t + 0.35 * gold
+    this.sun.position.set(3 - 7 * t, 6 - 4 * gold, 4) // the sun drops low and swings across
+    this.scene.environmentIntensity = 1 - 0.5 * t
   }
 
   private resize() {

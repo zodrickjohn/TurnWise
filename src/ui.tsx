@@ -111,10 +111,10 @@ const ICONS: Record<string, string> = {
   bulb: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z',
   search: 'M10.5 17a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13zM15.5 15.5L20 20',
 }
-export function Icon({ name, size = 22 }: { name: keyof typeof ICONS | string; size?: number }) {
+export function Icon({ name, size = 22, className }: { name: keyof typeof ICONS | string; size?: number; className?: string }) {
   const stroke = ['check', 'arrow', 'reset', 'close', 'camera', 'sun', 'moon', 'undo', 'bulb', 'search'].includes(name)
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" fill={stroke ? 'none' : 'currentColor'} stroke={stroke ? 'currentColor' : 'none'} strokeWidth={stroke ? 2.6 : 0} strokeLinecap="round" strokeLinejoin="round">
+    <svg className={className} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" fill={stroke ? 'none' : 'currentColor'} stroke={stroke ? 'currentColor' : 'none'} strokeWidth={stroke ? 2.6 : 0} strokeLinecap="round" strokeLinejoin="round">
       <path d={ICONS[name]} />
     </svg>
   )

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react'
 import { flushSync } from 'react-dom'
 import { SOLVED, type State } from './cube/model.ts'
 import { diagnose, normalize, solve, timeline, validate, type Chunk } from './cube/solver.ts'
 import { Icon, colorName, load, reduceMotion, save } from './ui.tsx'
+import { themeShow } from './themeShow.ts'
 import Home from './views/Home.tsx'
 import Learn from './views/Learn.tsx'
 import Input from './views/Input.tsx'
@@ -32,9 +33,9 @@ export default function App() {
   const [notice, setNotice] = useState<string>()
   const [session, setSession] = useState(0)
   const [theme, setTheme] = useState<Theme>(() => load<Theme>('theme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'))
-  useEffect(() => save('paint', paint), [paint])
-  useEffect(() => save('start', puzzle?.start ?? null), [puzzle])
-  useEffect(() => save('visited', [...visited]), [visited])
+  useEffect(() => { save('paint', paint) }, [paint])
+  useEffect(() => { save('start', puzzle?.start ?? null) }, [puzzle])
+  useEffect(() => { save('visited', [...visited]) }, [visited])
   useEffect(() => { document.documentElement.dataset.theme = theme; save('theme', theme) }, [theme])
 
   // Page changes cross-fade via the View Transitions API where supported
@@ -49,16 +50,41 @@ export default function App() {
   }
   useEffect(() => { window.scrollTo(0, 0) }, [view])
 
-  // Theme switch: the whole site turns like a cube; the old theme rotates away on one face, the new one in on the next
-  const toggleTheme = () => {
+  // Theme = time of day. A click lets the CSS --t value travel to noon or night (sunset or sunrise);
+  // dragging the toggle sideways scrubs --t directly, and letting go settles on the nearer end
+  const drag = useRef<{ x: number; t: number; moved: boolean } | null>(null)
+  const justScrubbed = useRef(false) // swallows the click that follows a drag
+  const setDayNight = (next: Theme) => { document.documentElement.dataset.theme = next; setTheme(next) }
+  const scrubStart = (e: PointerEvent<HTMLButtonElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    justScrubbed.current = false
+    drag.current = { x: e.clientX, t: theme === 'dark' ? 1 : 0, moved: false }
+  }
+  const scrubMove = (e: PointerEvent<HTMLButtonElement>) => {
+    const d = drag.current
+    if (!d || (!d.moved && Math.abs(e.clientX - d.x) < 5)) return
+    d.moved = true
     const root = document.documentElement
-    if (root.classList.contains('theme-turn')) return
+    root.classList.add('scrubbing')
+    root.style.setProperty('--t', String(Math.min(1, Math.max(0, d.t + (d.x - e.clientX) / 220)))) // drag left toward night
+  }
+  const scrubEnd = () => {
+    const d = drag.current
+    drag.current = null
+    if (!d?.moved) return
+    const root = document.documentElement
+    const t = parseFloat(root.style.getPropertyValue('--t'))
+    root.style.removeProperty('--t')
+    root.classList.remove('scrubbing')
+    setDayNight(t > 0.5 ? 'dark' : 'light') // the transition carries --t from where it was let go
+    justScrubbed.current = true
+  }
+  // A click plays the show: Cubie kicks the sun (or moon) away and the sky changes at the moment of the kick
+  const toggleTheme = (e: MouseEvent<HTMLButtonElement>) => {
+    if (justScrubbed.current) return void (justScrubbed.current = false)
     const next: Theme = theme === 'dark' ? 'light' : 'dark'
-    const apply = () => flushSync(() => { root.dataset.theme = next; setTheme(next) })
-    if (reduceMotion || !document.startViewTransition) return apply()
-    root.classList.add('theme-turn')
-    root.dataset.turn = next === 'dark' ? 'left' : 'right' // into the night turns left, back to day turns right
-    document.startViewTransition(apply).finished.finally(() => root.classList.remove('theme-turn'))
+    if (reduceMotion) return setDayNight(next)
+    themeShow(e.currentTarget, next === 'dark', () => setDayNight(next))
   }
 
   const openSolve = (p: Puzzle, f?: Fix, n?: string) => go('solve', () => { setPuzzle(p); setFix(f); setNotice(n); setRepair(null); setSession(x => x + 1) })
@@ -98,9 +124,12 @@ export default function App() {
             ))}
           </ol>
         </nav>
-        <button className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
-          <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={20} key={theme} />
+        <button className="theme-toggle" onClick={toggleTheme} onPointerDown={scrubStart} onPointerMove={scrubMove} onPointerUp={scrubEnd} onPointerCancel={scrubEnd}
+          aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
+          <Icon name="sun" size={22} className="sun" />
+          <Icon name="moon" size={22} className="moon" />
         </button>
+        <span className="scrub-hint" aria-hidden="true">Click, or drag sideways to set the time of day</span>
       </header>
       <main className={'view-' + view}>
         {view === 'home' && <Home go={go} resume={!!puzzle} />}
