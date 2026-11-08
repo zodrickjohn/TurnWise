@@ -33,3 +33,11 @@ console.log('impossible cubes rejected ok')
 // Which top edges does the yellow-edge algorithm swap?
 const after = move(SOLVED, "R U R' U R U2 R' U")
 console.log('UB,UL,UR,UF side stickers after alg:', [46, 37, 10, 19].map(i => after[i]).join(' '), '(solved: b r o g)')
+
+// Camera color recognition: references, plus dim and washed-out readings of the tricky pairs
+import { DEFAULT_REF, classify, type RGB } from '../src/cube/colors.ts'
+for (const [c, rgb] of Object.entries(DEFAULT_REF)) assert.equal(classify(rgb), c)
+const samples: [RGB, string][] = [[[150, 140, 30], 'y'], [[240, 225, 120], 'y'], [[160, 165, 170], 'w'], [[245, 245, 240], 'w'],
+  [[140, 25, 35], 'r'], [[210, 60, 50], 'r'], [[250, 140, 60], 'o'], [[190, 90, 25], 'o'], [[20, 110, 60], 'g'], [[25, 55, 140], 'b']]
+for (const [rgb, c] of samples) assert.equal(classify(rgb), c, `classify(${rgb}) should be ${c}`)
+console.log('color recognition ok')
