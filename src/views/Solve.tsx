@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Cube3D } from '../cube/Cube3D.ts'
 import { invertMove, move, toMoves, type State } from '../cube/model.ts'
 import { STAGES, timeline } from '../cube/solver.ts'
-import { Confetti, CubeView, Icon, Mini, PHASES, STEP_ART, Tiles, describe, faceColor, load, phaseOf, save } from '../ui.tsx'
+import { Confetti, CubeView, Icon, Mini, PHASES, STEP_ART, Tiles, describe, faceColor, load, phaseOf, save, toTop } from '../ui.tsx'
 import type { Puzzle } from '../App.tsx'
 import { Coach } from '../Coach.tsx'
 import { stickerBurst } from '../cubie.ts'
@@ -107,7 +107,7 @@ export default function Solve({ puzzle: { start, plan }, again, practice, onMism
     addEventListener('keydown', key)
     return () => removeEventListener('keydown', key)
   })
-  useEffect(() => { done ? scrollTo(0, 0) : document.querySelector('.line.current')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [pos])
+  useEffect(() => { done ? toTop() : document.querySelector('.line.current')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [pos])
 
   const info = STAGES[stage]
   const phase = PHASES[phaseOf(stage)]

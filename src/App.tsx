@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 
 import { flushSync } from 'react-dom'
 import { SOLVED, type State } from './cube/model.ts'
 import { diagnose, normalize, solve, timeline, validate, type Chunk } from './cube/solver.ts'
-import { Icon, colorName, load, reduceMotion, save } from './ui.tsx'
+import { Icon, colorName, load, reduceMotion, save, toTop } from './ui.tsx'
 import { themeShow } from './themeShow.ts'
 import Home from './views/Home.tsx'
 import Learn from './views/Learn.tsx'
@@ -48,7 +48,7 @@ export default function App() {
     })
     document.startViewTransition ? document.startViewTransition(swap) : swap()
   }
-  useEffect(() => { window.scrollTo(0, 0) }, [view])
+  useEffect(() => { toTop() }, [view])
 
   // Theme = time of day. A click lets the CSS --t value travel to noon or night (sunset or sunrise);
   // dragging the toggle sideways scrubs --t directly, and letting go settles on the nearer end

@@ -1,8 +1,13 @@
 import { useEffect, useRef, type CSSProperties, type RefObject } from 'react'
+import Lenis from 'lenis'
 import { Cube3D } from './cube/Cube3D.ts'
 import { FACES, NAME, toMoves, type Face, type State } from './cube/model.ts'
 
 export const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
+// Wheel scrolling glides with a little inertia (touch stays native); off for people who prefer less motion
+export const lenis = reduceMotion ? null : new Lenis({ autoRaf: true, lerp: 0.085 })
+// Jump to the top at once, cancelling any glide still in flight
+export const toTop = () => (lenis ? lenis.scrollTo(0, { immediate: true, force: true }) : scrollTo(0, 0))
 
 // Scroll reveals: only .reveal elements starting below the fold hide (.pre), then animate in (.in); returns a cleanup
 export function revealOnScroll() {
