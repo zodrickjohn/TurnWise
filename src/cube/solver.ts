@@ -1,3 +1,4 @@
+import { bigCube } from './big.ts'
 import { NAME, PIECES, SOLVED, STICKERS, cornersOnly, home, isCorner, isSolved, move, relabel, scramble, simplify, toMoves, type Size, type State } from './model.ts'
 
 export type Line = { alg: string; note: string }
@@ -224,17 +225,22 @@ export function solve(start: State, size: Size = 3): Chunk[][] {
     run(twistCorners)
     return out
   }
-  const crossReady = count(s, crossDone) === 4
-  run(s => (crossReady ? [s, []] : place(s, DAISY, petal, 6, p => `Bring the ${p} up`)))
-  run(s => (crossReady ? [s, []] : place(s, CROSS, crossDone, 3, p => `Drop the ${p}`)))
-  run(s => place(s, CORNER_OPTS, cornerDone, 6, p => `Place the ${p}`, x => count(x, crossDone) === 4))
-  run(s => place(s, MIDDLE, midDone, 6, p => `Insert the ${p}`, x => count(x, cornerDone) === 4 && count(x, crossDone) === 4))
-  run(s => whole(s, YCROSS, x => f2l(x) && topEdges.every(p => p.some(i => STICKERS[i].face === 'U' && x[i] === x[4])), 6, 'Build the yellow cross'))
-  run(s => whole(s, YEDGES, x => f2l(x) && topEdges.every(p => placed(x, p)), 6, 'Match the top edges'))
-  run(s => whole(s, YCORNERS, x => f2l(x) && topEdges.every(p => placed(x, p)) && CORNERS.every(p => positioned(x, p)), 4, 'Move corners to their spots'))
-  run(twistCorners)
+  STEPS.forEach(run)
   return out
 }
+
+// The eight steps one at a time (big cubes run them on their reduced 3x3 and slip parity fixes in between)
+const crossReady = (s: State) => count(s, crossDone) === 4
+export const STEPS: ((s: State) => [State, Chunk[]])[] = [
+  s => (crossReady(s) ? [s, []] : place(s, DAISY, petal, 6, p => `Bring the ${p} up`)),
+  s => (crossReady(s) ? [s, []] : place(s, CROSS, crossDone, 3, p => `Drop the ${p}`)),
+  s => place(s, CORNER_OPTS, cornerDone, 6, p => `Place the ${p}`, x => count(x, crossDone) === 4),
+  s => place(s, MIDDLE, midDone, 6, p => `Insert the ${p}`, x => count(x, cornerDone) === 4 && count(x, crossDone) === 4),
+  s => whole(s, YCROSS, x => f2l(x) && topEdges.every(p => p.some(i => STICKERS[i].face === 'U' && x[i] === x[4])), 6, 'Build the yellow cross'),
+  s => whole(s, YEDGES, x => f2l(x) && topEdges.every(p => placed(x, p)), 6, 'Match the top edges'),
+  s => whole(s, YCORNERS, x => f2l(x) && topEdges.every(p => placed(x, p)) && CORNERS.every(p => positioned(x, p)), 4, 'Move corners to their spots'),
+  twistCorners,
+]
 
 // Friendly check before solving: every sticker painted, 9 of each color, every piece real and unique
 export function validate(s: State, size: Size = 3): string | null {
@@ -258,11 +264,12 @@ export function validate(s: State, size: Size = 3): string | null {
 export type TimedMove = { stage: number; chunk: number; line: number; m: string }
 
 // Every move of a plan in order, tagged with where it sits, plus the cube state before each move (and after the last)
-export function timeline(start: State, plan: Chunk[][]) {
+export function timeline(start: State, plan: Chunk[][], size: Size = 3) {
+  const turn = size > 3 ? bigCube(size).move : move
   const moves: TimedMove[] = []
   plan.forEach((chunks, stage) => chunks.forEach((ch, chunk) => ch.lines.forEach((l, line) => toMoves(l.alg).forEach(m => moves.push({ stage, chunk, line, m })))))
   const states = [start]
-  moves.forEach(t => states.push(move(states.at(-1)!, t.m)))
+  moves.forEach(t => states.push(turn(states.at(-1)!, t.m)))
   return { moves, states }
 }
 

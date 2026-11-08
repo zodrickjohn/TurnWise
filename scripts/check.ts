@@ -113,3 +113,26 @@ import { SOLVED2, prepare } from '../src/cube/solver.ts'
   assert(isSolved(SOLVED2))
   console.log(`2x2 ok: 100 solves, avg ${(moves2 / 100).toFixed(0)} moves, worst ${worst2.toFixed(0)}ms to plan; setups and detective ok`)
 }
+
+// 4×4 and 5×5: the parity algorithms do exactly what they claim, and random cubes solve by reduction
+import { bigCube, bigScramble } from '../src/cube/big.ts'
+import { solveBig, validateBig } from '../src/cube/bigsolve.ts'
+{
+  const changed = (N: number, alg: string) => { const b = bigCube(N); return b.move(b.SOLVED, alg).filter((c, i) => c !== b.SOLVED[i]).length }
+  assert.equal(changed(5, "r2 B2 U2 l U2 r' U2 r U2 F2 r F2 l' B2 r2"), 4, '5×5 edge parity swaps just two wings')
+  assert.equal(changed(4, "r2 U2 r2 Uw2 r2 Uw2"), 12, '4×4 PLL parity touches only the top layer')
+  for (let i = 0; i < 50; i++) { const alg = scramble() + " y2 U y'"; assert.equal(bigCube(3).move(SOLVED, alg).join(''), move(SOLVED, alg).join(''), 'N×N model agrees with the 3×3 model') }
+  for (const [N, runs] of [[4, 6], [5, 3]] as const) {
+    const b = bigCube(N), A = N * N, mid = (N - 1) >> 1
+    let total = 0, t = performance.now()
+    for (let i = 0; i < runs; i++) {
+      const start = b.move(b.SOLVED, bigScramble())
+      assert.equal(validateBig(start, N), null)
+      const end = b.move(start, solveBig(start, N).flat().flatMap(c => c.lines.map(l => l.alg)).join(' '))
+      assert(end.every((c, j) => c === end[Math.floor(j / A) * A + mid * N + mid]), `${N}×${N} not solved`)
+      total += 1
+    }
+    console.log(`${N}×${N} ok: ${total} solves by reduction, avg ${((performance.now() - t) / runs).toFixed(0)}ms`)
+  }
+  assert.match(validateBig(bigCube(4).SOLVED.map((c, i) => (i ? c : '_')), 4)!, /blank/)
+}
