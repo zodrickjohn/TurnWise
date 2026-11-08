@@ -2,29 +2,21 @@ import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 
 import type { Cube3D } from '../cube/Cube3D.ts'
 import { FACES, SOLVED, move, scramble, type Face, type State } from '../cube/model.ts'
 import { solve, validate } from '../cube/solver.ts'
-import { CubeView, Icon, Mini, colorName } from '../ui.tsx'
+import { CubeView, HOLD, Icon, LABEL, Mini, ORDER, colorName } from '../ui.tsx'
+import Scanner from './Scanner.tsx'
 import type { Puzzle } from '../App.tsx'
 
 const PALETTE = ['w', 'y', 'r', 'o', 'g', 'b']
-const ORDER: Face[] = ['F', 'R', 'B', 'L', 'U', 'D']
-const LABEL: Record<Face, string> = { U: 'Top', R: 'Right', F: 'Front', D: 'Bottom', L: 'Left', B: 'Back' }
-const HOLD: Record<Face, string> = {
-  F: 'Yellow on top, green facing you.',
-  R: 'Yellow on top, orange facing you. Green is now on your left.',
-  B: 'Yellow on top, blue facing you.',
-  L: 'Yellow on top, red facing you. Green is now on your right.',
-  U: 'Tip the cube toward you so yellow faces you. Green ends up along the bottom edge.',
-  D: 'Tip the cube away so white faces you. Green ends up along the top edge.',
-}
 
 type Props = { paint: State; setPaint: Dispatch<SetStateAction<State>>; blank: State; onSolve: (p: Puzzle) => void }
-const faceOf = (s: State, f: Face) => s.slice(FACES.indexOf(f) * 9, FACES.indexOf(f) * 9 + 9)
+export const faceOf = (s: State, f: Face) => s.slice(FACES.indexOf(f) * 9, FACES.indexOf(f) * 9 + 9)
 
 export default function Input({ paint, setPaint, blank, onSolve }: Props) {
   const cube = useRef<Cube3D>(null)
   const [color, setColor] = useState('w')
   const [face, setFace] = useState<Face>('F')
   const [error, setError] = useState('')
+  const [scanning, setScanning] = useState(false)
   const dragging = useRef(false)
 
   useEffect(() => { cube.current?.setState(paint) }, [paint])
@@ -58,6 +50,22 @@ export default function Input({ paint, setPaint, blank, onSolve }: Props) {
           <h1>Paint your cube</h1>
           <p className="lede">Go face by face. Pick a color, then tap or drag across the stickers that match your cube. Centers are already set.</p>
         </header>
+
+        <div className="scan-callout">
+          <p><b>Faster:</b> show each face to your camera and Turnwise reads the colors for you.</p>
+          <button className="btn ink" onClick={() => setScanning(true)}><Icon name="camera" size={20} /> Scan with camera</button>
+        </div>
+        {scanning && (
+          <Scanner
+            start={face}
+            onClose={() => setScanning(false)}
+            onFaces={(faces, next) => {
+              setPaint(p => p.map((c, i) => faces[FACES[(i / 9) | 0]]?.[i % 9] ?? c))
+              setFace(next)
+              setError('')
+            }}
+          />
+        )}
 
         <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={48} aria-valuenow={painted} aria-label="Stickers painted">
           <span style={{ transform: `scaleX(${painted / 48})` }} />

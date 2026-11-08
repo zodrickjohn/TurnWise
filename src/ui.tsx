@@ -1,6 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import { Cube3D } from './cube/Cube3D.ts'
-import { FACES, NAME, toMoves, type State } from './cube/model.ts'
+import { FACES, NAME, toMoves, type Face, type State } from './cube/model.ts'
 
 export const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -80,6 +80,18 @@ export const PHASES = [
   { name: 'Middle layer', steps: [3], tone: 'g' },
   { name: 'Last layer', steps: [4, 5, 6, 7], tone: 'y' },
 ]
+// Faces in input order, their names, and how to hold the cube to see each one
+export const ORDER: Face[] = ['F', 'R', 'B', 'L', 'U', 'D']
+export const LABEL: Record<Face, string> = { U: 'Top', R: 'Right', F: 'Front', D: 'Bottom', L: 'Left', B: 'Back' }
+export const HOLD: Record<Face, string> = {
+  F: 'Yellow on top, green facing you.',
+  R: 'Yellow on top, orange facing you. Green is now on your left.',
+  B: 'Yellow on top, blue facing you.',
+  L: 'Yellow on top, red facing you. Green is now on your right.',
+  U: 'Tip the cube toward you so yellow faces you. Green ends up along the bottom edge.',
+  D: 'Tip the cube away so white faces you. Green ends up along the top edge.',
+}
+
 export const phaseOf = (step: number) => PHASES.findIndex(p => p.steps.includes(step))
 export const colorName = (c: string) => NAME[c] ?? 'blank'
 
@@ -91,9 +103,11 @@ const ICONS: Record<string, string> = {
   check: 'M4.5 12.5l4.5 4.5L19.5 6.5',
   arrow: 'M4 12h15M13 6l6 6-6 6',
   reset: 'M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v4h4',
+  close: 'M6 6l12 12M18 6L6 18',
+  camera: 'M4 8h3l1.5-2.5h7L17 8h3v11H4zM12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z',
 }
 export function Icon({ name, size = 22 }: { name: keyof typeof ICONS | string; size?: number }) {
-  const stroke = ['check', 'arrow', 'reset'].includes(name)
+  const stroke = ['check', 'arrow', 'reset', 'close', 'camera'].includes(name)
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" fill={stroke ? 'none' : 'currentColor'} stroke={stroke ? 'currentColor' : 'none'} strokeWidth={stroke ? 2.6 : 0} strokeLinecap="round" strokeLinejoin="round">
       <path d={ICONS[name]} />
