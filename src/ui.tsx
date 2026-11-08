@@ -1,7 +1,8 @@
 import { useEffect, useRef, type CSSProperties, type RefObject } from 'react'
 import Lenis from 'lenis'
 import { Cube3D } from './cube/Cube3D.ts'
-import { FACES, NAME, toMoves, type Face, type State } from './cube/model.ts'
+import { FACES, NAME, SOLVED, toMoves, type Face, type Size, type State } from './cube/model.ts'
+import { SOLVED2, STAGES, STAGES2 } from './cube/solver.ts'
 
 export const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 // Wheel scrolling glides with a little inertia (touch stays native); off for people who prefer less motion
@@ -36,10 +37,10 @@ export function save(key: string, value: unknown) {
 }
 
 // Mounts a Cube3D into a div and exposes it through cubeRef
-export function CubeView({ cubeRef, initial, className = '', interactive = true, follow = false }: { cubeRef: RefObject<Cube3D | null>; initial: State; className?: string; interactive?: boolean; follow?: boolean }) {
+export function CubeView({ cubeRef, initial, className = '', interactive = true, follow = false, size = 3 }: { cubeRef: RefObject<Cube3D | null>; initial: State; className?: string; interactive?: boolean; follow?: boolean; size?: Size }) {
   const host = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    const c = new Cube3D(host.current!, initial, interactive, follow && !reduceMotion)
+    const c = new Cube3D(host.current!, initial, interactive, follow && !reduceMotion, size)
     cubeRef.current = c
     return () => { c.dispose(); cubeRef.current = null }
   }, [])
@@ -81,7 +82,7 @@ export function Tiles({ alg, colors, at = -1, done = -1, size = '' }: { alg: str
 // Tiny 3x3 face diagram: color letters, '_' = any/unsolved, '?' = right place but maybe twisted
 export function Mini({ pattern, label }: { pattern: string; label: string }) {
   return (
-    <span className="mini" role="img" aria-label={label}>
+    <span className="mini" role="img" aria-label={label} style={{ '--n': Math.sqrt(pattern.length) } as CSSProperties}>
       {[...pattern].map((c, i) => <i key={i} className={c === '?' ? 'q' : 'c-' + c} style={{ '--k': i } as CSSProperties} />)}
     </span>
   )
@@ -115,7 +116,25 @@ export const HOLD: Record<Face, string> = {
   D: 'Tip the cube away so white faces you. Green ends up along the top edge.',
 }
 
-export const phaseOf = (step: number) => PHASES.findIndex(p => p.steps.includes(step))
+// No centers on a 2x2: the learner picks a grip and keeps it
+export const HOLD2: Record<Face, string> = {
+  F: 'Pick a side to face you and a side to be on top. Keep that grip for every face.',
+  R: 'Turn the whole cube a quarter to the left, so the right side faces you.',
+  B: 'Another quarter turn to the left: the back faces you.',
+  L: 'One more quarter turn: the left side faces you.',
+  U: 'Back to your starting grip, then tip the cube toward you so the top faces you.',
+  D: 'From your starting grip, tip the cube away so the bottom faces you.',
+}
+// Everything a view needs for one cube size: the steps, their phases and target art, how to hold it, and its solved state
+export const KIT = {
+  3: { size: 3 as Size, stages: STAGES, phases: PHASES, art: STEP_ART, hold: HOLD, solved: SOLVED, stickers: 48 },
+  2: {
+    size: 2 as Size, stages: STAGES2, solved: SOLVED2, stickers: 24, hold: HOLD2,
+    phases: [{ name: 'First layer', steps: [0], tone: 'w' }, { name: 'Last layer', steps: [1, 2], tone: 'y' }],
+    art: [{ pattern: 'wwww', view: 'Bottom' }, { pattern: '????', view: 'Top' }, { pattern: 'yyyy', view: 'Top' }],
+  },
+}
+export const phaseOf = (step: number, phases = PHASES) => phases.findIndex(p => p.steps.includes(step))
 export const colorName = (c: string) => NAME[c] ?? 'blank'
 
 const ICONS: Record<string, string> = {

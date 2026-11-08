@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Cube3D } from '../cube/Cube3D.ts'
 import { invertMove, move, toMoves, type State } from '../cube/model.ts'
-import { STAGES, timeline } from '../cube/solver.ts'
-import { Confetti, CubeView, Icon, Mini, PHASES, STEP_ART, Tiles, describe, faceColor, load, phaseOf, save, toTop } from '../ui.tsx'
+import { timeline } from '../cube/solver.ts'
+import { Confetti, CubeView, Icon, KIT, Mini, Tiles, describe, faceColor, load, phaseOf, save, toTop } from '../ui.tsx'
 import type { Puzzle } from '../App.tsx'
 import { Coach } from '../Coach.tsx'
 import { stickerBurst } from '../cubie.ts'
@@ -11,7 +11,9 @@ const SPEEDS: [string, number][] = [['Slow', 950], ['Normal', 600], ['Fast', 320
 export type Fix = { at: number; wrong: string }
 type Props = { puzzle: Puzzle; again: () => void; practice: () => void; onMismatch: (expected: State, pos: number) => void; fix?: Fix; notice?: string }
 
-export default function Solve({ puzzle: { start, plan }, again, practice, onMismatch, fix, notice }: Props) {
+export default function Solve({ puzzle: { start, plan, size }, again, practice, onMismatch, fix, notice }: Props) {
+  const { stages: STAGES, phases: PHASES, art: STEP_ART } = KIT[size]
+  const last = STAGES.length - 1
   const cube = useRef<Cube3D>(null)
   const busy = useRef(false)
   const key = start.join('')
@@ -37,7 +39,7 @@ export default function Solve({ puzzle: { start, plan }, again, practice, onMism
 
   const done = pos >= moves.length
   const cur = moves[pos]
-  const stage = done ? 7 : cur.stage
+  const stage = done ? last : cur.stage
 
   const step = async (dir: 1 | -1) => {
     const p = posRef.current
@@ -110,7 +112,7 @@ export default function Solve({ puzzle: { start, plan }, again, practice, onMism
   useEffect(() => { done ? toTop() : document.querySelector('.line.current')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [pos])
 
   const info = STAGES[stage]
-  const phase = PHASES[phaseOf(stage)]
+  const phase = PHASES[phaseOf(stage, PHASES)]
   return (
     <div className={'solve-wrap tone-' + phase.tone}>
       <nav className="rail" aria-label="Solve progress">
@@ -118,7 +120,7 @@ export default function Solve({ puzzle: { start, plan }, again, practice, onMism
           const [a, b] = span(k)
           const fill = a < 0 ? 1 : Math.min(1, Math.max(0, (pos - a) / (b - a)))
           return (
-            <button key={k} className={`seg tone-${PHASES[phaseOf(k)].tone}${k === stage && !done ? ' on' : ''}`} style={{ flexGrow: Math.max(b - a, 6) }}
+            <button key={k} className={`seg tone-${PHASES[phaseOf(k, PHASES)].tone}${k === stage && !done ? ' on' : ''}`} style={{ flexGrow: Math.max(b - a, 6) }}
               onClick={() => jump(a < 0 ? Math.max(0, moves.findIndex(t => t.stage > k)) : a)} disabled={a < 0} title={`Step ${k + 1}: ${s.title}${a < 0 ? ' (already done)' : ''}`}>
               <span className="seg-fill" style={{ transform: `scaleX(${fill})` }} />
               <span className="seg-n">{fill === 1 ? <Icon name="check" size={14} /> : k + 1}</span>
@@ -134,10 +136,10 @@ export default function Solve({ puzzle: { start, plan }, again, practice, onMism
               mood={done || cleared >= 0 ? 'cheer' : pending ? 'wow' : playing ? 'happy' : 'idle'}
               sayKey={done ? 'done' : cleared >= 0 ? `clear-${cleared}` : pending ? 'fix' : pos}
               say={done ? 'Solved! Every one of those turns was yours.'
-                : cleared >= 0 ? <><b>Step {cleared + 1} done!</b> {STAGES[cleared].title} is complete.{cleared < 7 && <> Up next: {STAGES[cleared + 1].title}.</>}</>
+                : cleared >= 0 ? <><b>Step {cleared + 1} done!</b> {STAGES[cleared].title} is complete.{cleared < last && <> Up next: {STAGES[cleared + 1].title}.</>}</>
                 : pending ? <span className="say-move"><Tiles alg={pending} colors={[faceColor(move(states[at], fix!.wrong), pending)]} at={0} size="xl" /><span><b>Fix first.</b> {describe(pending)}</span></span>
                 : <span className="say-move"><Tiles alg={cur.m} colors={[colors[pos]]} at={0} size="xl" /><span>{describe(cur.m)}</span></span>} />
-            <CubeView cubeRef={cube} initial={fix ? move(states[at], fix.wrong) : states[at]} />
+            <CubeView cubeRef={cube} initial={fix ? move(states[at], fix.wrong) : states[at]} size={size} />
             <div className="transport">
               <button className="btn white icon" onClick={() => step(-1)} disabled={pos === 0 || !!pending} aria-label="Previous move (left arrow)"><Icon name="prev" /></button>
               {pending
@@ -163,7 +165,7 @@ export default function Solve({ puzzle: { start, plan }, again, practice, onMism
               <Confetti />
               <span className="stamp">Solved</span>
               <h1>{moves.length} moves. Every one of them yours.</h1>
-              <p className="lede">That's the whole beginner's method. Scramble your cube and go again: this time read "What to look for" before you press play, and try to predict each move.</p>
+              <p className="lede">That's the whole beginner's method{size === 2 ? ' for the 2×2' : ''}. Scramble your cube and go again: this time read "What to look for" before you press play, and try to predict each move.</p>
               <div className="actions">
                 <button className="btn yellow" onClick={again}>Solve another cube <Icon name="arrow" size={18} /></button>
                 <button className="btn white" onClick={practice}>Practice a step on your own</button>
@@ -175,14 +177,14 @@ export default function Solve({ puzzle: { start, plan }, again, practice, onMism
               <header className="step-head" key={stage}>
                 <span className="step-badge">{stage + 1}</span>
                 <div>
-                  <p className="step-of">Step {stage + 1} of 8, {phase.name.toLowerCase()}</p>
+                  <p className="step-of">Step {stage + 1} of {STAGES.length}, {phase.name.toLowerCase()}</p>
                   <h1>{info.title}</h1>
                 </div>
                 <Mini pattern={STEP_ART[stage].pattern} label={`${STEP_ART[stage].view} face when this step is done`} />
               </header>
               <p className="lede goal">{info.goal}</p>
               {notice && pos === resumed ? <p className="hold" role="status">{notice}</p>
-                : pos === 0 ? <p className="hold">Hold your cube with <b>yellow on top</b> and <b>green facing you</b>, then follow along.</p>
+                : pos === 0 ? <p className="hold">{size === 3 ? <>Hold your cube with <b>yellow on top</b> and <b>green facing you</b>, then follow along.</> : <>Hold your cube <b>the way you painted it</b>, then follow along.</>}</p>
                 : pos === resumed && <p className="hold">Welcome back. Your cube is where you left it at step {stage + 1}. Make sure your real cube matches the one on screen.</p>}
               <div className="explain">
                 <section className="panel">

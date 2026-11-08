@@ -117,7 +117,7 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 24px 64px; }
 .key { display: inline-grid; place-items: center; min-width: 1.9em; padding: 0 6px; border: 2px solid var(--ink); border-radius: 6px; border-bottom-width: 4px; font: 700 0.8rem var(--body); background: var(--card); }
 
 /* Tiny face diagrams */
-.mini { --m: 12px; display: inline-grid; grid-template-columns: repeat(3, var(--m)); gap: 2px; padding: 3px; background: var(--solid); border-radius: 6px; flex: none; }
+.mini { --m: 12px; display: inline-grid; grid-template-columns: repeat(var(--n, 3), calc(var(--m) * 3 / var(--n, 3))); gap: 2px; padding: 3px; background: var(--solid); border-radius: 6px; flex: none; }
 .mini i { width: var(--m); height: var(--m); border-radius: 2px; }
 .mini i.c-_ { background: #555b67; }
 .mini i.q { background: repeating-linear-gradient(45deg, var(--y) 0 3px, #b9bec9 3px 6px); }
@@ -328,7 +328,8 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 24px 64px; }
 .editor-head { justify-self: stretch; display: grid; gap: 6px; }
 .editor-head h2 { display: flex; align-items: center; gap: 10px; }
 .dot { width: 22px; height: 22px; border: 2.5px solid var(--ink); border-radius: 6px; }
-.big-face { --s: clamp(70px, 9vw, 100px); display: grid; grid-template-columns: repeat(3, var(--s)); gap: 8px; padding: 10px; background: var(--solid); border-radius: 18px; touch-action: none; user-select: none; animation: face-in 0.45s var(--ease); }
+.big-face { --s: clamp(70px, 9vw, 100px); display: grid; grid-template-columns: repeat(var(--n, 3), var(--s)); gap: 8px; padding: 10px; background: var(--solid); border-radius: 18px; touch-action: none; user-select: none; animation: face-in 0.45s var(--ease); }
+.big-face.two { --n: 2; --s: clamp(100px, 13vw, 144px); }
 @keyframes face-in { from { transform: perspective(700px) rotateY(-28deg) scale(0.92); opacity: 0; } }
 .big-st { width: var(--s); height: var(--s); border: 0; border-radius: 11px; padding: 0; transition: background 0.18s, transform 0.12s var(--ease); }
 button.big-st:hover { transform: scale(0.95); }
@@ -610,6 +611,7 @@ button.big-st:active { transform: scale(0.88); }
 
 /* Practice: mode switch, setup player, real-cube badge */
 .mode-switch { display: inline-flex; justify-self: start; padding: 4px; gap: 4px; border: var(--line); border-radius: 14px; background: var(--card); box-shadow: var(--sh-sm); }
+.practice-switches { display: flex; flex-wrap: wrap; gap: 10px; }
 .mode-switch button { padding: 9px 16px; border: 0; border-radius: 10px; background: none; font-weight: 700; transition: background 0.2s var(--ease), color 0.2s; }
 .mode-switch button[aria-checked='true'] { background: var(--ink); color: var(--card); }
 .ps-badges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
