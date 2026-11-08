@@ -21,7 +21,7 @@ function restorePuzzle(): Puzzle | null {
   const start = load<unknown>('start', null)
   try { return isCube(start) && !validate(start) ? { start, plan: solve(start) } : null } catch { return null }
 }
-const JOURNEY: [View, string][] = [['learn', 'Learn the moves'], ['input', 'Paint your cube'], ['solve', 'Solve it'], ['practice', 'Practice']]
+const JOURNEY: [View, string, string][] = [['learn', 'Learn the moves', 'Learn'], ['input', 'Paint your cube', 'Paint'], ['solve', 'Solve it', 'Solve'], ['practice', 'Practice', 'Practice']]
 
 export default function App() {
   const [view, setView] = useState<View>('home')
@@ -114,11 +114,11 @@ export default function App() {
         </button>
         <nav aria-label="Your journey">
           <ol className="journey">
-            {JOURNEY.map(([v, label], i) => (
+            {JOURNEY.map(([v, label, short], i) => (
               <li key={v} className={view === v ? 'on' : visited.has(v) ? 'seen' : ''}>
                 <button aria-current={view === v ? 'step' : undefined} disabled={v === 'solve' && !puzzle} onClick={() => go(v, () => v === 'input' && setRepair(null))}>
                   <span className="num">{visited.has(v) && view !== v ? <Icon name="check" size={14} /> : i + 1}</span>
-                  <span className="label">{label}</span>
+                  <span className="label">{label}</span><span className="label-short">{short}</span>
                 </button>
               </li>
             ))}

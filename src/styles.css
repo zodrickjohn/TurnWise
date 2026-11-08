@@ -41,8 +41,8 @@
 :root[data-theme='dark'] { --t: 1; color-scheme: dark; }
 :root.scrubbing { transition: none; } /* the toggle is being dragged: --t follows the pointer */
 /* Sticker-colored surfaces always carry black ink, whatever the theme */
-.btn.yellow, .t-y, .t-o, .t-g, .t-w, .s1, .s3, .cta-band, .hold, .next-panel, .grip-chip, .demo-step, .stamp, .journey .on button,
-.face-tabs button.on, .tone-g .step-badge, .tone-y .step-badge, .tone-g .phase-name, .tone-y .phase-name, .tick, .swatch, .chip.par {
+.btn.yellow, .t-y, .t-o, .t-g, .t-w, .t-learn, .t-practice, .cta-band, .hold, .next-panel, .grip-chip, .demo-step, .stamp, .journey .on button,
+.face-tabs button.on, .tone-g .step-badge, .tone-y .step-badge, .tick, .swatch, .chip.par {
   --ink: #000; --ink-2: #2a2e37; --card: #fff; color: #000;
 }
 
@@ -135,19 +135,21 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 24px 64px; }
 .journey button { display: flex; align-items: center; gap: 8px; padding: 7px 14px 7px 8px; border: 2.5px solid transparent; border-radius: 999px; background: none; font-weight: 700; }
 .journey button:hover:not(:disabled) { border-color: var(--ink); }
 .journey button:disabled { opacity: 0.4; }
+.journey .label-short { display: none; }
 .journey .on button { background: var(--y); border-color: var(--ink); box-shadow: var(--sh-sm); }
 .num { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 2.5px solid var(--ink); background: var(--card); font: 800 0.75rem var(--display); }
 .journey .seen .num { background: var(--g); }
 
 /* Home: hero */
 .hero {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 24px; margin-top: 28px;
-  padding: clamp(28px, 4.5vw, 64px); background: var(--b); color: #fff; border: var(--line); border-radius: 28px; box-shadow: calc(10px * var(--lx)) 10px 0 var(--drop);
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 24px; margin-top: clamp(14px, 2.6svh, 28px);
+  padding: clamp(26px, 4svh, 48px) clamp(24px, 4.5vw, 64px); /* hugs its content: no empty bands above or below */ background: var(--b); color: #fff; border: var(--line); border-radius: 28px; box-shadow: calc(10px * var(--lx)) 10px 0 var(--drop);
 }
-.hero h1 { font-size: clamp(2.1rem, 4.4vw, 4rem); line-height: 1.02; color: #fff; margin-bottom: 26px; }
-.hero .lede { color: #fff; font-size: 1.2rem; }
+.hero h1 { font-size: clamp(1.9rem, min(4.4vw, 7.2svh), 4rem); line-height: 1.02; color: #fff; margin-bottom: clamp(10px, 2.4svh, 26px); }
+.hero .actions { margin-top: clamp(14px, 2.6svh, 26px); }
+.hero .lede { color: #fff; font-size: clamp(1rem, 2.1svh, 1.2rem); }
 .hero-cube { margin: 0; display: grid; justify-items: center; gap: 14px; }
-.hero-cube .cube { height: min(60vh, 540px); }
+.hero-cube .cube { height: clamp(220px, 52svh, 540px); }
 .demo-chip {
   display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 8px 10px 8px 8px; color: var(--ink); background: var(--card);
   border: var(--line); border-radius: 14px; box-shadow: var(--sh-sm); font-weight: 700;
@@ -159,38 +161,121 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 24px 64px; }
 .cube:active { cursor: grabbing; }
 .cube canvas { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
 
+/* Motion: the opening sequence. Headline words land like stickers, then copy, buttons and Cubie follow */
+.hero h1 .w { display: inline-block; white-space: pre; animation: word-in 0.7s var(--ease) backwards; animation-delay: calc(120ms + var(--i) * 75ms); }
+@keyframes word-in { from { opacity: 0; transform: translateY(0.45em) rotate(-7deg) scale(0.6); filter: blur(4px); } }
+.hero .lede { animation: rise-in 0.6s var(--ease) 0.62s backwards; }
+.hero .actions .btn { animation: pop-in 0.5s var(--ease) backwards; }
+.hero .actions .btn:nth-child(1) { animation-delay: 0.78s; }
+.hero .actions .btn:nth-child(2) { animation-delay: 0.86s; }
+.hero-coach { animation: rise-in 0.6s var(--ease) 1s backwards; }
+.demo-chip { animation: pop-in 0.5s var(--ease) 1.1s backwards; }
+@keyframes rise-in { from { opacity: 0; transform: translateY(16px); } }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.7) translateY(10px); } }
+
+/* Scroll reveals: cards drop in like stickers being placed */
+.reveal.pre { opacity: 0; }
+.reveal.in { animation: place-in 0.7s var(--ease) backwards; animation-delay: calc(var(--i, 0) * 110ms); }
+@keyframes place-in { from { opacity: 0; transform: translateY(40px) rotate(-3deg) scale(0.94); } }
+
+/* App pages: panels deal in when you arrive */
+.split > .lesson > :not(.step-head) { animation: rise-in 0.5s var(--ease) backwards; }
+.split > .lesson > :nth-child(2) { animation-delay: 60ms; } .split > .lesson > :nth-child(3) { animation-delay: 120ms; }
+.split > .lesson > :nth-child(4) { animation-delay: 180ms; } .split > .lesson > :nth-child(5) { animation-delay: 240ms; }
+.split > .lesson > :nth-child(n + 6) { animation-delay: 300ms; }
+.split > .stage { animation: pop-in 0.6s var(--ease) 80ms backwards; }
+
 /* Home: notation marquee */
 .marquee { width: 104vw; margin: 56px 0 0 calc(50% - 52vw); padding: 16px 0; background: var(--solid); border-block: var(--line); transform: rotate(-1.5deg); overflow: hidden; }
 .marquee-track { display: flex; gap: 6px; width: max-content; animation: marquee 48s linear infinite; }
 .marquee .tile { font-size: 1.1rem; box-shadow: none; border-color: #fff; }
 @keyframes marquee { to { transform: translateX(-50%); } }
 
-/* Home: three stops */
-.journey-intro { padding-top: 80px; }
-.journey-intro h2, .method h2, .cta-band h2 { font-size: clamp(1.5rem, 3vw, 2.3rem); max-width: 22ch; }
-.stops { list-style: none; padding: 0; margin: 36px 0 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; align-items: start; }
-.stop { display: grid; gap: 12px; justify-items: start; padding: 26px; border: var(--line); border-radius: var(--rad); box-shadow: var(--sh); }
-.stop p { color: var(--ink-2); }
-.s1 { background: var(--y); }
-.s2 { background: var(--card); margin-top: 36px; }
-.s3 { background: var(--g); margin-top: 72px; }
-.s3 p { color: var(--ink); }
-.stop-n { font: 800 3.2rem/1 var(--display); letter-spacing: -0.06em; }
-.stop h3 { font-size: 1.2rem; }
+/* Home: scroll to solve. A tall section whose content pins while the visitor scrubs the cube with their scroll */
+/* Home: scroll-through solve. Rows scroll normally; one cube glides to the free side of the active step */
+.ss { margin-top: 80px; }
+.ss-head { max-width: 40rem; }
+.ss-head h2 { font-size: clamp(1.8rem, 3.6vw, 3rem); line-height: 1.05; text-wrap: balance; }
+.ss-head p { font-size: 1.12rem; color: var(--ink-2); margin-top: 12px; }
+.ss-body { position: relative; }
+.ss-ride { position: absolute; left: 0; top: 0; z-index: 1; pointer-events: none; will-change: transform; }
+.ss-ride .cube { position: absolute; inset: 0; min-height: 0; }
+.ss-floor { position: absolute; left: 24%; right: 24%; bottom: 2%; height: 30px; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--ink) 22%, transparent), transparent); }
+.ss-steps { list-style: none; margin: 0; padding: 0; }
+.ss-step { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 40px; min-height: 88svh; padding-block: 24px; }
+.ss-step:nth-child(even) .ss-slot { order: -1; }
+.ss-slot { height: min(56svh, 480px); }
+.ss-text { position: relative; isolation: isolate; display: grid; justify-items: start; gap: 10px; opacity: 0.3; transition: opacity 0.5s var(--ease); }
+.ss-step.on .ss-text { opacity: 1; }
+.ss-phase { font-weight: 700; color: var(--ink-2); }
+.ss-n { position: absolute; z-index: -1; top: -0.42em; left: -0.08em; font: 800 clamp(8rem, 17vw, 15rem)/1 var(--display); letter-spacing: -0.06em; color: transparent; -webkit-text-stroke: 2px color-mix(in srgb, var(--ink) 20%, transparent); pointer-events: none; } /* big numeral drifting behind the text */
+.ss-step h3 { font-size: clamp(1.8rem, 3.4vw, 3rem); line-height: 1; }
+.ss-goal { font-size: 1.1rem; color: var(--ink-2); max-width: 30rem; }
+.ss-cap { font-weight: 700; margin-top: 6px; }
+.ss-more { color: var(--ink-2); font-size: 0.95rem; }
+.ss-step .tiles { gap: 8px; }
+.ss-step .tile.lg { font-size: 1.05rem; }
+.ss-end h3 { font-size: clamp(2.6rem, 5vw, 4.4rem); }
 
-/* Home: method phases */
-.method { padding-top: 96px; }
-.method .sub { color: var(--ink-2); margin-top: 12px; max-width: 40rem; }
-.phases { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 36px; align-items: flex-start; }
-.phase { flex: 1 1 260px; background: var(--card); border: var(--line); border-radius: var(--rad); box-shadow: var(--sh); overflow: hidden; }
-.phase-name { padding: 14px 20px; background: var(--fill); color: var(--on-fill); border-bottom: var(--line); font-size: 1rem; }
-.phase ol { list-style: none; margin: 0; padding: 8px 20px 12px; }
-.step { display: flex; gap: 16px; align-items: center; padding: 14px 0; }
-.step + .step { border-top: 2px dashed color-mix(in srgb, var(--ink) 22%, transparent); }
-.step .mini { --m: 15px; }
-.step h4 { display: flex; align-items: center; gap: 8px; }
-.step p { color: var(--ink-2); font-size: 0.95rem; margin-top: 4px; }
-.step-n { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; background: var(--solid); color: #fff; font-size: 0.72rem; letter-spacing: 0; flex: none; }
+/* Home: feature showcase. Each tile runs a tiny live demo of what it does */
+.showcase { padding-top: 72px; }
+.showcase h2 { font-size: clamp(1.5rem, 3vw, 2.3rem); max-width: 22ch; }
+.bento { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 20px; margin-top: 32px; }
+.tile-card { grid-column: span 2; display: grid; align-content: start; gap: 8px; padding: 22px; text-align: left; color: var(--ink); background: var(--card);
+  border: var(--line); border-radius: var(--rad); box-shadow: var(--sh); transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease); }
+.tile-card:hover { transform: translate(calc(-3px * var(--lx)), -3px) rotate(-0.6deg); box-shadow: calc(9px * var(--lx)) 9px 0 var(--drop); }
+.tile-card:active { transform: translate(calc(2px * var(--lx)), 2px); box-shadow: calc(2px * var(--lx)) 2px 0 var(--drop); }
+.tile-card h3 { font-size: 1.1rem; }
+.tile-card p { color: var(--ink-2); }
+.t-practice, .t-sky { grid-column: span 3; grid-template-columns: minmax(0, 1fr) minmax(0, 260px); grid-template-areas: 'title demo' 'text demo'; column-gap: 20px; align-content: center; }
+.t-practice .demo, .t-sky .demo { grid-area: demo; margin: 0; }
+.t-practice h3, .t-sky h3 { grid-area: title; align-self: end; }
+.t-practice p, .t-sky p { grid-area: text; align-self: start; }
+.t-learn { background: var(--y); }
+.t-practice { background: var(--g); }
+.t-scan { background: var(--b); --ink: #fff; --ink-2: #e6ecff; color: #fff; }
+.t-sky { background: #18204a; --ink: #fff; --ink-2: #c9d2f2; color: #fff; }
+.demo { height: 124px; display: grid; place-items: center; margin-bottom: 6px; }
+/* Learn: keys press in sequence */
+.demo-keys { display: flex; gap: 10px; }
+.demo-keys kbd { display: grid; place-items: center; min-width: 58px; height: 58px; border: 3px solid #000; border-radius: 12px; background: #fff; color: #000; font: 800 1.2rem var(--display); box-shadow: 0 6px 0 #000;
+  animation: key-press 2.4s calc(var(--d) * 0.45s) infinite; }
+@keyframes key-press { 0%, 22%, 100% { transform: none; box-shadow: 0 6px 0 #000; background: #fff; } 8% { transform: translateY(6px); box-shadow: 0 0 0 #000; background: var(--o); } }
+/* Scan: a viewfinder sweeps and its dots fill with detected colors */
+.demo-scan .vf { position: relative; display: grid; grid-template-columns: repeat(3, 26px); gap: 8px; padding: 12px; border: 4px solid #fff; border-radius: 16px; box-shadow: 0 0 0 999px #0000; }
+.demo-scan i { width: 26px; height: 26px; border-radius: 50%; border: 3px solid #000; background: #ffffff40; animation: detect 3.2s calc(var(--d) * 0.1s) infinite; }
+.demo-scan i:nth-child(3n + 1) { --c: var(--y); } .demo-scan i:nth-child(3n + 2) { --c: var(--r); } .demo-scan i:nth-child(3n) { --c: var(--g); }
+.demo-scan i:nth-child(5) { --c: var(--w); } .demo-scan i:nth-child(7) { --c: var(--o); }
+@keyframes detect { 0%, 28% { background: #ffffff40; transform: scale(0.8); } 38%, 88% { background: var(--c); transform: none; } 100% { background: #ffffff40; } }
+.scanline { position: absolute; left: 6px; right: 6px; top: 8px; height: 3px; border-radius: 2px; background: var(--y); box-shadow: 0 0 12px var(--y); animation: sweep 3.2s ease-in-out infinite; }
+@keyframes sweep { 0% { transform: translateY(0); opacity: 1; } 35% { transform: translateY(100px); opacity: 1; } 40%, 100% { transform: translateY(100px); opacity: 0; } }
+/* Detective: a magnifier searches the face and lands on the wrong sticker */
+.demo-detective { position: relative; }
+.demo-detective .face { display: grid; grid-template-columns: repeat(3, 28px); gap: 4px; padding: 5px; background: #000; border-radius: 10px; }
+.demo-detective .face i { width: 28px; height: 28px; border-radius: 6px; }
+.demo-detective .odd { animation: odd 4s infinite; }
+@keyframes odd { 0%, 62% { box-shadow: none; } 70%, 92% { box-shadow: 0 0 0 4px #fff, 0 0 0 7px var(--r); } }
+.lens { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border: 5px solid #000; border-radius: 50%; background: #ffffff55; animation: search 4s var(--ease) infinite; }
+.lens::after { content: ''; position: absolute; right: -14px; bottom: -14px; width: 7px; height: 20px; background: #000; border-radius: 4px; transform: rotate(-45deg); }
+@keyframes search { 0% { transform: translate(-32px, -30px); } 20% { transform: translate(30px, -28px); } 40% { transform: translate(-30px, 28px); } 60%, 92% { transform: translate(0, 0) scale(1.15); } 100% { transform: translate(-32px, -30px); } }
+/* Practice: stars fill one by one */
+.demo-stars { display: flex; gap: 14px; }
+.demo-stars i { width: 52px; height: 52px; background: #000; clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); position: relative; }
+.demo-stars i::after { content: ''; position: absolute; inset: 5px; background: var(--y); clip-path: inherit; transform: scale(0); animation: star-fill 3s calc(var(--d) * 0.35s) infinite; }
+@keyframes star-fill { 0%, 10% { transform: scale(0); } 22%, 85% { transform: scale(1); } 100% { transform: scale(0); } }
+/* Day and night: a tiny sky cycles between sun and moon */
+.demo-sky { position: relative; width: 100%; max-width: 280px; height: 110px; border-radius: 16px; border: 3px solid #000; overflow: hidden; background: linear-gradient(#7cc8ff, #ffe7a8 70%); }
+.demo-sky::before { content: ''; position: absolute; inset: 0; opacity: 0; animation: night 6s ease-in-out infinite;
+  background: radial-gradient(1.5px 1.5px at 20% 30%, #fff, transparent), radial-gradient(1.5px 1.5px at 70% 20%, #fff, transparent), radial-gradient(2px 2px at 45% 60%, #fff, transparent),
+    radial-gradient(1.5px 1.5px at 85% 55%, #fff, transparent), radial-gradient(1.5px 1.5px at 12% 70%, #fff, transparent), linear-gradient(#0b1640, #2a2470 80%); }
+@keyframes night { 0%, 32% { opacity: 0; } 48%, 86% { opacity: 1; } 100% { opacity: 0; } }
+.demo-sky .orb { z-index: 1; }
+.orb { position: absolute; left: 50%; width: 44px; height: 44px; margin-left: -22px; border: 3px solid #000; border-radius: 50%; }
+.orb.sun { background: var(--y); animation: orb-sun 6s ease-in-out infinite; }
+.orb.moon { background: #f6f6f2; box-shadow: inset -12px -4px 0 #00000030; animation: orb-moon 6s ease-in-out infinite; }
+@keyframes orb-sun { 0%, 30% { top: 22px; } 45%, 90% { top: 130px; } 100% { top: 22px; } }
+@keyframes orb-moon { 0%, 40% { top: 130px; } 55%, 85% { top: 22px; } 100% { top: 130px; } }
+.cta-band h2 { font-size: clamp(1.5rem, 3vw, 2.3rem); max-width: 22ch; }
 .cta-band { margin-top: 96px; display: grid; gap: 14px; justify-items: start; padding: clamp(28px, 5vw, 56px); background: var(--y); border: var(--line); border-radius: 28px; box-shadow: calc(10px * var(--lx)) 10px 0 var(--drop); }
 .cta-band .btn { margin-top: 10px; }
 .foot { padding: 48px 0 0; color: var(--ink-2); font-size: 0.92rem; }
@@ -400,7 +485,7 @@ button.big-st:active { transform: scale(0.88); }
 .stage-coach { padding: 14px 18px 4px; border-top: var(--line); min-height: 128px; }
 .now-coach { padding: 14px 18px 2px; border-bottom: var(--line); min-height: 118px; }
 .paint-coach { margin-bottom: 4px; }
-.hero-coach { margin-top: 30px; max-width: 34rem; }
+.hero-coach { margin-top: clamp(10px, 2.6svh, 30px); max-width: 34rem; }
 .hero-coach .coach-bubble { color: var(--ink); }
 .burst-layer { position: fixed; inset: 0; z-index: var(--z-overlay); pointer-events: none; }
 
@@ -438,17 +523,43 @@ button.big-st:active { transform: scale(0.88); }
 .hints h2 { display: flex; align-items: center; gap: 8px; }
 .hint-moves { display: grid; gap: 10px; justify-items: start; padding: 14px; border: 2.5px dashed color-mix(in srgb, var(--ink) 40%, transparent); border-radius: 12px; animation: tile-in 0.35s var(--ease); }
 
+/* Parallax via native scroll-driven CSS: hero copy outruns the page, numerals, demos and hero cube lag behind it */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .ss-n { animation: depth-back linear both; animation-timeline: view(); }
+    .demo { animation: depth-far linear both; animation-timeline: view(); }
+    .ss-text { animation: focus-row linear both; animation-timeline: view(); }
+    .hero-copy { animation: hero-lift linear both; animation-timeline: scroll(); animation-range: 0 80svh; }
+    .hero-cube { animation: hero-sink linear both; animation-timeline: scroll(); animation-range: 0 80svh; }
+  }
+}
+@keyframes depth-back { from { translate: 0 -120px; } to { translate: 0 120px; } }
+@keyframes depth-far { from { translate: 0 -26px; } to { translate: 0 26px; } }
+@keyframes focus-row { 0%, 100% { opacity: 0.18; } 36%, 64% { opacity: 1; } } /* text comes into focus at the middle of the screen */
+@keyframes hero-lift { to { translate: 0 -70px; } }
+@keyframes hero-sink { to { translate: 0 40px; scale: 0.9; } }
+
 /* Tablet and phone */
 @media (max-width: 960px) {
   main { padding: 0 16px 48px; }
   .bar { padding: 10px 16px; }
   .journey .label { display: none; }
-  .journey button { padding: 6px; }
+  .journey .label-short { display: inline; }
+  .journey button { padding: 6px 10px 6px 6px; }
   .hero { grid-template-columns: 1fr; margin-top: 16px; box-shadow: calc(6px * var(--lx)) 6px 0 var(--drop); border-radius: 22px; }
-  .hero-cube .cube { height: 46vh; min-height: 300px; }
+  .hero { min-height: 0; }
+  .hero-cube .cube { height: clamp(220px, 34svh, 380px); min-height: 0; }
   .marquee { margin-top: 40px; }
-  .stops { grid-template-columns: 1fr; }
-  .s2, .s3 { margin-top: 0; }
+  .ss { margin-top: 56px; }
+  .ss-step { grid-template-columns: 1fr; align-content: center; gap: 12px; min-height: 84svh; padding-block: 28px; }
+  .ss-step .ss-slot, .ss-step:nth-child(even) .ss-slot { order: -1; height: 34svh; }
+  .ss-n { font-size: 7.5rem; }
+  .ss-step h3 { font-size: 1.6rem; }
+  .ss-goal { font-size: 1rem; }
+  .ss-step .tile.lg { font-size: 0.9rem; }
+  .bento { grid-template-columns: 1fr; }
+  .tile-card, .t-practice, .t-sky { grid-column: auto; }
+  .t-practice, .t-sky { grid-template-columns: 1fr; grid-template-areas: 'demo' 'title' 'text'; }
   .split, .solve { grid-template-columns: 1fr; gap: 24px; }
   .rail { top: 61px; padding: 10px 0 6px; }
   .learn .stage { order: -1; position: sticky; top: 64px; z-index: var(--z-sticky); }
@@ -477,6 +588,8 @@ button.big-st:active { transform: scale(0.88); }
   .theme-toggle { width: 40px; height: 40px; }
 }
 @media (max-width: 520px) {
+  .journey .label-short { display: none; }
+  .hero .actions .btn { flex: 1 1 100%; }
   .brand > span:last-child { display: none; }
   .rail { gap: 4px; }
   .seg { min-width: 0; height: 38px; }

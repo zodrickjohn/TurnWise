@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { Cube3D } from '../cube/Cube3D.ts'
 import { SOLVED, move, scramble, toMoves } from '../cube/model.ts'
 import { STAGES, solve } from '../cube/solver.ts'
-import { CubeView, Icon, Mini, PHASES, STEP_ART, Tiles, faceColor, reduceMotion } from '../ui.tsx'
+import { CubeView, Icon, Tiles, faceColor, reduceMotion, revealOnScroll } from '../ui.tsx'
+import { ScrollSolve, Showcase } from './HomeSections.tsx'
 import type { View } from '../App.tsx'
 import { Coach } from '../Coach.tsx'
 
@@ -46,23 +47,30 @@ export default function Home({ go, resume }: { go: (v: View) => void; resume: bo
     return () => { alive = false }
   }, [])
 
+  useEffect(() => revealOnScroll(), [])
   const status = demo.stage === -2 ? 'Drag the cube to look around' : demo.stage === -1 ? 'Scrambling' : demo.stage === 8 ? 'Solved in 8 steps' : STAGES[demo.stage].title
   return (
     <>
       <section className="hero">
         <div className="hero-copy">
-          <h1>Solve your cube. Understand every turn.</h1>
+          <h1 aria-label="Solve your cube. Understand every turn.">
+            {'Solve your cube. Understand every turn.'.split(' ').map((w, i) => <span key={i} className="w" aria-hidden="true" style={{ '--i': i } as CSSProperties}>{w} </span>)}
+          </h1>
           <p className="lede">
             Paint in your scrambled cube's colors. Turnwise walks you through the beginner's method one move at a time,
             and tells you what to look for and why each move works.
           </p>
           <div className="actions">
-            {resume && <button className="btn yellow" onClick={() => go('solve')}><Icon name="play" size={18} /> Continue your solve</button>}
-            <button className={'btn ' + (resume ? 'white' : 'yellow')} onClick={() => go('learn')}>Start learning <Icon name="arrow" size={18} /></button>
-            <button className="btn white" onClick={() => go('input')}>I have a scrambled cube</button>
+            {resume ? <>
+              <button className="btn yellow" onClick={() => go('solve')}><Icon name="play" size={18} /> Continue your solve</button>
+              <button className="btn white" onClick={() => go('input')}>Paint a new cube</button>
+            </> : <>
+              <button className="btn yellow" onClick={() => go('learn')}>Start learning <Icon name="arrow" size={18} /></button>
+              <button className="btn white" onClick={() => go('input')}>I have a scrambled cube</button>
+            </>}
           </div>
-          <Coach className="hero-coach" size={104} mood="wave" sayKey="hi"
-            say={<>Hi, I'm <b>Cubie</b>! I'll coach you through every turn. Psst: try clicking the sun up there.</>} />
+          <Coach className="hero-coach" size={96} mood="wave" sayKey="hi"
+            say={<>Hi, I'm <b>Cubie</b>, your coach! Psst: try clicking the sun up there.</>} />
         </div>
         <figure className="hero-cube">
           <CubeView cubeRef={cube} initial={reduceMotion ? STILL : SOLVED} follow />
@@ -80,51 +88,8 @@ export default function Home({ go, resume }: { go: (v: View) => void; resume: bo
         </div>
       </div>
 
-      <section className="journey-intro" aria-labelledby="how-h">
-        <h2 id="how-h">Three stops from scrambled to solved</h2>
-        <ol className="stops">
-          <li className="stop s1">
-            <span className="stop-n">1</span>
-            <h3>Learn the moves</h3>
-            <p>Letters like R and U' are the language of the cube. Five minutes and you can read any algorithm.</p>
-            <button className="btn white" onClick={() => go('learn')}>Learn the moves</button>
-          </li>
-          <li className="stop s2">
-            <span className="stop-n">2</span>
-            <h3>Paint your cube</h3>
-            <p>Copy your cube into the app, one face at a time. The 3D cube turns to show you exactly how to hold it.</p>
-            <button className="btn white" onClick={() => go('input')}>Paint your cube</button>
-          </li>
-          <li className="stop s3">
-            <span className="stop-n">3</span>
-            <h3>Follow along</h3>
-            <p>Watch each move, copy it on your real cube, and read why it works. Step by step until it's solved.</p>
-          </li>
-        </ol>
-      </section>
-
-      <section className="method" aria-labelledby="method-h">
-        <h2 id="method-h">The method: eight steps, bottom to top</h2>
-        <p className="sub">You build the cube in three layers. Each step only needs moves you already know.</p>
-        <div className="phases">
-          {PHASES.map(ph => (
-            <section key={ph.name} className={'phase tone-' + ph.tone} style={{ flexGrow: ph.steps.length }}>
-              <h3 className="phase-name">{ph.name}</h3>
-              <ol>
-                {ph.steps.map(i => (
-                  <li key={i} className="step">
-                    <Mini pattern={STEP_ART[i].pattern} label={`${STEP_ART[i].view} face when step ${i + 1} is done`} />
-                    <div>
-                      <h4><span className="step-n">{i + 1}</span>{STAGES[i].title}</h4>
-                      <p>{STAGES[i].goal}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          ))}
-        </div>
-      </section>
+      <ScrollSolve />
+      <Showcase go={go} />
 
       <section className="cta-band">
         <h2>Grab your cube.</h2>

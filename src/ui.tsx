@@ -1,8 +1,26 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useRef, type CSSProperties, type RefObject } from 'react'
 import { Cube3D } from './cube/Cube3D.ts'
 import { FACES, NAME, toMoves, type Face, type State } from './cube/model.ts'
 
 export const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
+
+// Scroll reveals: only .reveal elements starting below the fold hide (.pre), then animate in (.in); returns a cleanup
+export function revealOnScroll() {
+  if (reduceMotion) return
+  let pending = [...document.querySelectorAll('.reveal')].filter(el => el.getBoundingClientRect().top > innerHeight)
+  pending.forEach(el => el.classList.add('pre'))
+  // Anything that has reached the lower part of the screen, or been scrolled (or jumped) past, comes in
+  const check = () => {
+    pending = pending.filter(el => {
+      if (el.getBoundingClientRect().top > innerHeight * 0.88) return true
+      el.classList.replace('pre', 'in')
+      return false
+    })
+    if (!pending.length) removeEventListener('scroll', check)
+  }
+  addEventListener('scroll', check, { passive: true })
+  return () => removeEventListener('scroll', check)
+}
 
 // Per-browser memory (progress survives a refresh); storage can be blocked, so failures fall back silently
 export function load<T>(key: string, fallback: T): T {
@@ -59,7 +77,7 @@ export function Tiles({ alg, colors, at = -1, done = -1, size = '' }: { alg: str
 export function Mini({ pattern, label }: { pattern: string; label: string }) {
   return (
     <span className="mini" role="img" aria-label={label}>
-      {[...pattern].map((c, i) => <i key={i} className={c === '?' ? 'q' : 'c-' + c} />)}
+      {[...pattern].map((c, i) => <i key={i} className={c === '?' ? 'q' : 'c-' + c} style={{ '--k': i } as CSSProperties} />)}
     </span>
   )
 }

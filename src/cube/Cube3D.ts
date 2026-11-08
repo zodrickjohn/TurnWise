@@ -26,6 +26,8 @@ export class Cube3D {
   private rig = new THREE.Group() // entrance, pointer tilt and victory spin; group inside handles face focus
   private tilt = { x: 0, y: 0, tx: 0, ty: 0 }
   private spinAt = -1
+  yaw = 0 // target turn of the whole cube, set from outside; eased toward each frame
+  private yawNow = 0
   private onPointer?: (e: PointerEvent) => void
   private sun = new THREE.DirectionalLight('#ffffff', 1.2)
   private dayT = -1
@@ -95,7 +97,8 @@ export class Cube3D {
       t.y += (t.ty - t.y) * 0.06
       const spin = this.spinAt < 0 ? 0 : ease(Math.min(1, (now - this.spinAt) / 1600)) * Math.PI * 2
       this.rig.scale.setScalar(0.6 + 0.4 * e)
-      this.rig.rotation.set(t.x, (1 - e) * -2.2 + t.y + spin, 0)
+      this.yawNow += (this.yaw - this.yawNow) * 0.045
+      this.rig.rotation.set(t.x, (1 - e) * -2.2 + t.y + spin + this.yawNow, 0)
       this.group.quaternion.slerp(this.target, 0.1)
       this.light()
       this.controls?.update()
@@ -167,6 +170,9 @@ export class Cube3D {
     const tilt = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(0.28, -0.38, 0))
     this.target.setFromRotationMatrix(new THREE.Matrix4().extractRotation(this.camera.matrixWorld).multiply(tilt).multiply(face.transpose()))
   }
+
+  // Resolves once every queued turn has finished animating
+  settle() { return this.queue }
 
   // Victory spin of the whole cube
   spin() { this.spinAt = performance.now() }
