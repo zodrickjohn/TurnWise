@@ -1,4 +1,4 @@
-import { NAME, PIECES, SOLVED, STICKERS, home, isSolved, move, relabel, scramble, simplify, toMoves, type State } from './model.ts'
+import { NAME, PIECES, SOLVED, STICKERS, cornersOnly, home, isCorner, isSolved, move, relabel, scramble, simplify, toMoves, type Size, type State } from './model.ts'
 
 export type Line = { alg: string; note: string }
 export type Chunk = { title: string; lines: Line[] }
@@ -55,6 +55,23 @@ export const STAGES = [
     why: "R' D' R D twists the front-right corner. The lower layers look scrambled while you work, but once every corner is twisted correctly they fall back into place.",
     look: 'Keep yellow on top and never turn the whole cube during this step. Fix the front-right corner, then turn only the top layer to bring the next unfinished corner to front-right.',
   },
+]
+
+// The 2x2 runs the corner steps of the same method: no centers, so the first layer is built against each other
+export const STAGES2 = [
+  {
+    title: 'White layer',
+    goal: 'Build the four white corners on the bottom, white facing down, so each side shows a matching pair.',
+    why: STAGES[2].why,
+    look: "A 2×2 has no centers, so the white corners you have already placed are your guide. A corner's home is the bottom slot where its two side colors match the corners next to it. Park it above that slot, hold the slot at front-right, and repeat the trigger.",
+  },
+  {
+    title: 'Place yellow corners',
+    goal: 'Move each yellow corner to its own spot, even if it is still twisted.',
+    why: STAGES[6].why,
+    look: 'A corner is in its spot when its side colors match the bottom layer under it, in any rotation. Turn the top until at least one fits, hold it at front-right, and do the algorithm.',
+  },
+  STAGES[7],
 ]
 
 export const IMPOSSIBLE = "These colors describe a cube that can't exist. Usually two stickers are swapped, or a corner is twisted in place. Check each face against your cube."
@@ -179,11 +196,34 @@ const cornerDone: Pred = (s, p) => p.length === 3 && layer(p) === -1 && placed(s
 const midDone: Pred = (s, p) => p.length === 2 && layer(p) === 0 && placed(s, p)
 const positioned = (s: State, p: number[]) => p.map(i => s[i]).sort().join() === p.map(i => home(s, i)).sort().join()
 
-// Solve with the 8-step beginner's method; returns chunks of moves per stage
-export function solve(start: State): Chunk[][] {
+const bottom2 = (s: State) => count(s, cornerDone) === 4
+const PLACE2: Opt[] = [...turns('U', 'Turn the top until at least one corner sits in its spot.'), ...YCORNERS]
+export const SOLVED2 = SOLVED.map((c, i) => (isCorner(i) || i % 9 === 4 ? c : '_'))
+const total = (plan: Chunk[][]) => plan.flat().reduce((n, ch) => n + ch.lines.reduce((m, l) => m + toMoves(l.alg).length, 0), 0)
+
+// A painted cube ready to solve. On a 2x2 the solver picks the white-down frame (invisible centers) with the shortest solve
+export function prepare(cube: State, size: Size = 3) {
+  if (size === 3) return { start: cube, plan: solve(cube) }
+  const frames = [0, 1, 2, 3].map(k => {
+    const f = move(SOLVED2, 'y '.repeat(k))
+    const start = cube.map((c, i) => (i % 9 === 4 ? f[i] : c))
+    try { return { start, plan: solve(start, 2) } } catch { return null }
+  }).filter(x => x !== null)
+  if (!frames.length) throw new Error(IMPOSSIBLE)
+  return frames.reduce((a, b) => (total(b.plan) < total(a.plan) ? b : a))
+}
+
+// Solve with the beginner's method (8 steps, or 3 corner steps on a 2x2); returns chunks of moves per stage
+export function solve(start: State, size: Size = 3): Chunk[][] {
   let s = start
   const out: Chunk[][] = []
   const run = (fn: (s: State) => [State, Chunk[]]) => { const [n, c] = fn(s); s = n; out.push(c) }
+  if (size === 2) {
+    run(s => place(s, CORNER_OPTS, cornerDone, 6, p => `Place the ${p}`))
+    run(s => whole(s, PLACE2, x => bottom2(x) && CORNERS.every(p => positioned(x, p)), 6, 'Move corners to their spots'))
+    run(twistCorners)
+    return out
+  }
   const crossReady = count(s, crossDone) === 4
   run(s => (crossReady ? [s, []] : place(s, DAISY, petal, 6, p => `Bring the ${p} up`)))
   run(s => (crossReady ? [s, []] : place(s, CROSS, crossDone, 3, p => `Drop the ${p}`)))
@@ -197,14 +237,16 @@ export function solve(start: State): Chunk[][] {
 }
 
 // Friendly check before solving: every sticker painted, 9 of each color, every piece real and unique
-export function validate(s: State): string | null {
-  const blank = s.filter(c => c === '_').length
+export function validate(s: State, size: Size = 3): string | null {
+  const cells = size === 3 ? s : s.filter((_, i) => isCorner(i)), per = size * size
+  const blank = cells.filter(c => c === '_').length
   if (blank) return `${blank} sticker${blank > 1 ? 's are' : ' is'} still blank. Paint every sticker to continue.`
-  const off = Object.keys(NAME).filter(c => s.filter(x => x === c).length !== 9)
-  if (off.length) return `Each color should appear 9 times. Check ${off.map(c => `${NAME[c]} (${s.filter(x => x === c).length})`).join(', ')}.`
-  const real = new Set(PIECES.map(p => pieceName(s.map((_, i) => home(s, i)), p)))
+  const off = Object.keys(NAME).filter(c => cells.filter(x => x === c).length !== per)
+  if (off.length) return `Each color should appear ${per} times. Check ${off.map(c => `${NAME[c]} (${cells.filter(x => x === c).length})`).join(', ')}.`
+  const pieces = size === 3 ? PIECES : CORNERS
+  const real = new Set(pieces.map(p => pieceName(SOLVED, p)))
   const seen = new Set<string>()
-  for (const p of PIECES) {
+  for (const p of pieces) {
     const n = pieceName(s, p)
     if (!real.has(n)) return `There's a piece showing ${n.replace(/ (edge|corner)$/, '')}, and no such piece exists. Check the ${p.map(i => FACE_NAME[STICKERS[i].face]).join(', ')} faces.`
     if (seen.has(n)) return `The ${n} appears twice. One of its stickers is painted the wrong color.`
@@ -224,8 +266,9 @@ export function timeline(start: State, plan: Chunk[][]) {
   return { moves, states }
 }
 
-// True once step k (0-7) of the method is complete on this cube
-export function stageDone(k: number, s: State) {
+// True once step k of the method is complete on this cube
+export function stageDone(k: number, s: State, size: Size = 3) {
+  if (size === 2) return [() => bottom2(s), () => bottom2(s) && CORNERS.every(p => positioned(s, p)), () => isSolved(s)][k]()
   const bottom = count(s, crossDone) === 4 && count(s, cornerDone) === 4
   return [
     () => count(s, petal) === 4 || count(s, crossDone) === 4,
@@ -249,9 +292,11 @@ const SINGLE = [...'URFDLB'].flatMap(f => [f, f + "'", f + '2'])
 export type Diagnosis = { kind: 'same' | 'jump' | 'slip' | 'new'; at: number; wrong?: string }
 
 // Mistake detective: find the solve position the real cube matches, or that plus one stray turn
-export function diagnose(states: State[], pos: number, actual: State): Diagnosis {
-  const key = actual.join('')
-  const same = (s: State) => normalize(s).join('') === key
+export function diagnose(states: State[], pos: number, actual: State, size: Size = 3): Diagnosis {
+  // A 2x2 has no centers to say which side faces you, so any of the four turns of the whole cube counts
+  const view = (s: State) => (size === 3 ? normalize(s) : cornersOnly(s)).join('')
+  const key = view(actual)
+  const same = (s: State) => (size === 3 ? [s] : ['', 'y', 'y2', "y'"].map(y => move(s, y))).some(x => view(x) === key)
   const near = states.map((_, p) => p).sort((a, b) => Math.abs(a - pos) - Math.abs(b - pos))
   for (const p of near) if (same(states[p])) return { kind: p === pos ? 'same' : 'jump', at: p }
   for (const p of near) for (const m of SINGLE) if (same(move(states[p], m))) return { kind: 'slip', at: p, wrong: m }
@@ -267,17 +312,18 @@ const SETUP: [string[], number][] = [
 ]
 
 // Short setup moves that take a solved cube to the start of step k, for practicing on a real cube
-export function practiceSetup(k: number) {
+export function practiceSetup(k: number, size: Size = 3) {
+  const K = size === 3 ? k : [0, 6, 7][k] // a 2x2 step reuses the 3x3 step with the same goal (0: any scramble)
   for (let tries = 0; tries < 500; tries++) {
-    const [algs, n] = SETUP[k]
+    const [algs, n] = SETUP[K]
     const setup = simplify(
-      k === 0 ? scramble(20)
-      : k === 1 ? `F2 R2 B2 L2 ${pick(SPIN)} ${pick(['D', "D'", 'D2', ''])}` // white edges up: a daisy
-      : k === 7 ? ((u: string) => `${reps("R' D' R D", 2)} ${u} ${reps("D' R' D R", 2)} ${u.endsWith('2') ? u : u.endsWith("'") ? 'U' : "U'"}`)(pick(SPIN)) // twist, turn top, untwist: two corners twisted opposite ways
+      K === 0 ? scramble(size === 3 ? 20 : 11)
+      : K === 1 ? `F2 R2 B2 L2 ${pick(SPIN)} ${pick(['D', "D'", 'D2', ''])}` // white edges up: a daisy
+      : K === 7 ? ((u: string) => `${reps("R' D' R D", 2)} ${u} ${reps("D' R' D R", 2)} ${u.endsWith('2') ? u : u.endsWith("'") ? 'U' : "U'"}`)(pick(SPIN)) // twist, turn top, untwist: two corners twisted opposite ways
       : Array.from({ length: n }, () => `${relabel(pick(algs), (Math.random() * 4) | 0)} ${pick([...SPIN, ''])}`).join(' '))
-    const start = move(SOLVED, setup)
-    if (stageDone(k, start) || (k > 0 && !stageDone(k - 1, start))) continue
-    const par = toMoves(solve(start)[k].flatMap(ch => ch.lines.map(l => l.alg)).join(' ')).length
+    const start = move(size === 3 ? SOLVED : SOLVED2, setup)
+    if (stageDone(k, start, size) || (k > 0 && !stageDone(k - 1, start, size))) continue
+    const par = toMoves(solve(start, size)[k].flatMap(ch => ch.lines.map(l => l.alg)).join(' ')).length
     if (par) return { setup, start, par }
   }
   throw new Error('No practice setup found')

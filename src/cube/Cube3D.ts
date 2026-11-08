@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
-import { BASE, FRAME, STICKERS, move, type Face, type State } from './model.ts'
+import { BASE, FRAME, STICKERS, isCorner, move, type Face, type Size, type State } from './model.ts'
 
 export const HEX: Record<string, string> = { w: '#f6f6f2', y: '#ffd60a', r: '#f0302a', o: '#ff8a00', g: '#00c46a', b: '#2f6bff', _: '#3a3f4b' }
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -41,7 +41,7 @@ export class Cube3D {
   private ro: ResizeObserver
   private host: HTMLElement
 
-  constructor(host: HTMLElement, state: State, interactive = true, followPointer = false) {
+  constructor(host: HTMLElement, state: State, interactive = true, followPointer = false, size: Size = 3) {
     this.host = host
     this.state = state
     const { renderer, scene, camera } = this
@@ -50,6 +50,7 @@ export class Cube3D {
     scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture
     this.sun.position.set(3, 6, 4)
     this.rig.add(this.group)
+    if (size === 2) this.group.scale.setScalar(1.4) // fill about the same space as a 3x3
     scene.add(this.sun, this.rig)
     camera.position.set(5.2, 4.3, 7.4).setLength(DIST)
     camera.lookAt(0, 0, 0)
@@ -58,12 +59,15 @@ export class Cube3D {
     const bodyMat = new THREE.MeshStandardMaterial({ color: '#0e0f12', roughness: 0.45 })
     const sticker = roundedSquare(0.41, 0.1)
     const byPos = new Map<string, THREE.Mesh>()
-    STICKERS.forEach(({ pos, normal }) => {
+    const gap = size === 2 ? 0.5 : 1 // a 2x2 is the 8 corner cubies pulled in to touch
+    STICKERS.forEach(({ pos, normal }, i) => {
+      if (size === 2 && !isCorner(i)) return
       let c = byPos.get(pos.join())
       if (!c) {
         c = new THREE.Mesh(body, bodyMat)
         c.userData.home = pos
-        c.position.set(...pos)
+        c.userData.at = pos.map(v => v * gap)
+        c.position.set(...(c.userData.at as [number, number, number]))
         byPos.set(pos.join(), c)
         this.cubies.push(c)
         this.group.add(c)
@@ -72,7 +76,7 @@ export class Cube3D {
       m.position.set(...normal).multiplyScalar(0.485)
       m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(...normal))
       c.add(m)
-      this.stickers.push(m)
+      this.stickers[i] = m // sparse on a 2x2: indices stay those of the state
     })
     this.setState(state)
 
@@ -152,7 +156,7 @@ export class Cube3D {
         pivot.rotation[(['x', 'y', 'z'] as const)[axis]] = angle * ease(t)
         pivot.position.setComponent(axis, lift * Math.sin(Math.PI * t)) // turning layer lifts out slightly
         if (t < 1) return
-        layerCubies.forEach(c => { this.group.add(c); c.position.set(...(c.userData.home as [number, number, number])); c.quaternion.identity() })
+        layerCubies.forEach(c => { this.group.add(c); c.position.set(...(c.userData.at as [number, number, number])); c.quaternion.identity() })
         this.group.remove(pivot)
         this.tween = null
         this.setState(next)

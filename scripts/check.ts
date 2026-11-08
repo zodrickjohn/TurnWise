@@ -82,3 +82,34 @@ for (let k = 0; k < 8; k++) {
   assert(par === 0 ? stageDone(k, start) : !stageDone(k, start))
 }
 console.log('practice from a scrambled cube ok')
+
+// 2x2: random corner states solve from the best frame, steps complete in order, bad cubes rejected
+import { cornersOnly } from '../src/cube/model.ts'
+import { SOLVED2, prepare } from '../src/cube/solver.ts'
+{
+  let moves2 = 0, worst2 = 0
+  for (let i = 0; i < 100; i++) {
+    const cube = cornersOnly(move(SOLVED, scramble()))
+    assert.equal(validate(cube, 2), null)
+    const t = performance.now()
+    const { start, plan } = prepare(cube, 2)
+    worst2 = Math.max(worst2, performance.now() - t)
+    assert.equal(cornersOnly(start).join(''), cube.join(''), 'the frame only adds invisible centers')
+    const { moves, states } = timeline(start, plan)
+    const ends = [0, 1, 2].map(k => moves.findLastIndex(t => t.stage <= k) + 1)
+    ends.forEach((e, k) => assert(stageDone(k, states[e], 2), `2x2 step ${k + 1} done at its end`))
+    assert(isSolved(states.at(-1)!), '2x2 not solved')
+    moves2 += moves.length
+  }
+  const twisted2 = cornersOnly(SOLVED); [twisted2[8], twisted2[9], twisted2[20]] = [twisted2[9], twisted2[20], twisted2[8]]
+  assert.throws(() => prepare(move(twisted2, scramble()), 2), { message: IMPOSSIBLE })
+  assert.match(validate(cornersOnly(['_', ...SOLVED.slice(1)]), 2)!, /blank/)
+  const pos = 12, { states } = timeline(...(({ start, plan }) => [start, plan] as const)(prepare(cornersOnly(move(SOLVED, scramble())), 2)))
+  assert.equal(diagnose(states, pos, cornersOnly(move(states[pos], 'y')), 2).kind, 'same', 'a turned 2x2 still matches')
+  for (let k = 0; k < 3; k++) for (let i = 0; i < 20; i++) {
+    const { start, par } = practiceSetup(k, 2)
+    assert(!stageDone(k, start, 2) && (k === 0 || stageDone(k - 1, start, 2)) && par > 0, `2x2 setup for step ${k + 1}`)
+  }
+  assert(isSolved(SOLVED2))
+  console.log(`2x2 ok: 100 solves, avg ${(moves2 / 100).toFixed(0)} moves, worst ${worst2.toFixed(0)}ms to plan; setups and detective ok`)
+}
