@@ -2,7 +2,7 @@
 
 Learn to solve your own Rubik's cube with the 8-step beginner's method. Scan your cube with the camera (or paint its colors), then follow an animated 3D walkthrough that explains what to look for and why each algorithm works. Progress is remembered across refreshes.
 
-- **Practice mode:** drill any of the 8 steps on screen against a par move count, or on your own cube: short setup moves from a solved cube, then an optional camera check that the step is done.
+- **Practice mode:** drill any of the 8 steps on screen against a par move count, or on your own cube: short setup moves from a solved cube (or, from a scrambled cube, the guide's earlier steps), then an optional camera check that the step is done.
 - **Mistake detective:** if your cube stops matching the screen, scan it and Turnwise finds the slip or replans.
 - **Dark mode:** with a cube-sticker transition when you switch.
 
