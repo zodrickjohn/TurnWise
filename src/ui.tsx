@@ -3,6 +3,8 @@ import Lenis from 'lenis'
 import { Cube3D } from './cube/Cube3D.ts'
 import { FACES, NAME, SOLVED, toMoves, type Face, type Size, type State } from './cube/model.ts'
 import { SOLVED2, STAGES, STAGES2 } from './cube/solver.ts'
+import { STAGES_BIG } from './cube/bigsolve.ts'
+import { bigCube } from './cube/big.ts'
 
 export const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 // Wheel scrolling glides with a little inertia (touch stays native); off for people who prefer less motion
@@ -56,17 +58,29 @@ const HINT: Record<string, [string, string]> = {
   F: ['top row slides right', 'top row slides left'],
   B: ['top row slides left', 'top row slides right'],
   y: ['the right side comes to the front', 'the left side comes to the front'],
+  x: ['the front goes to the top', 'the top comes to the front'],
+  z: ['the top goes to the right', 'the top goes to the left'],
 }
+const MIDDLE: Record<string, string> = { M: 'Middle slice between left and right, turned like the left face', E: 'Middle slice between top and bottom, turned like the bottom face', S: 'Middle slice between front and back, turned like the front face' }
 
 // Plain-English description of one move
+// Big cubes add r (the second layer in, alone), Rw (the face and that layer together), M E S and x z
 export function describe(m: string) {
-  const f = m[0], k = m.endsWith('2') ? 2 : m.endsWith("'") ? 1 : 0
-  if (f === 'y') return k === 2 ? 'Turn the whole cube half way around' : `Turn the whole cube so ${HINT.y[k]}`
-  return k === 2 ? `${FACE_NAME[f]} face, half turn` : `${FACE_NAME[f]} face ${k ? 'counter-clockwise' : 'clockwise'}: ${HINT[f][k]}`
+  const k = m.endsWith('2') ? 2 : m.endsWith("'") ? 1 : 0, core = m.replace(/['2]$/, '')
+  if ('xyz'.includes(core)) return k === 2 ? (core === 'x' ? 'Turn the whole cube upside down' : 'Turn the whole cube half way around') : `Turn the whole cube so ${HINT[core][k]}`
+  if (MIDDLE[core]) return `${MIDDLE[core]}${k === 2 ? ', half turn' : k ? ', backwards' : ''}`
+  const f = core.match(/[URFDLB]/i)![0], F = f.toUpperCase()
+  const what = core.endsWith('w') ? `${FACE_NAME[F]} face and the layer behind it` : f !== F ? `${FACE_NAME[F]} inner slice (the second layer in)` : `${FACE_NAME[F]} face`
+  return k === 2 ? `${what}, half turn` : `${what} ${k ? 'counter-clockwise' : 'clockwise'}: ${HINT[F][k]}`
 }
 
 // Color of the center on the face a move turns (what the user sees on that side right now)
-export const faceColor = (s: State, m: string) => (m[0] === 'y' ? 'rot' : s[FACES.indexOf(m[0] as never) * 9 + 4])
+export const faceColor = (s: State, m: string) => {
+  const f = m.match(/[URFDLB]/i)?.[0]
+  if (!f || /^[xyzMES]/.test(m)) return 'rot' // whole-cube turns and middle slices
+  const n = Math.round(Math.sqrt(s.length / 6)), mid = (n - 1) >> 1
+  return s[FACES.indexOf(f.toUpperCase() as Face) * n * n + mid * n + mid]
+}
 
 // Move notation as sticker key caps colored by the face they turn; `at` highlights one, `done` dims earlier ones
 export function Tiles({ alg, colors, at = -1, done = -1, size = '' }: { alg: string; colors?: string[]; at?: number; done?: number; size?: string }) {
@@ -126,13 +140,32 @@ export const HOLD2: Record<Face, string> = {
   D: 'From your starting grip, tip the cube away so the bottom faces you.',
 }
 // Everything a view needs for one cube size: the steps, their phases and target art, how to hold it, and its solved state
-export const KIT = {
-  3: { size: 3 as Size, stages: STAGES, phases: PHASES, art: STEP_ART, hold: HOLD, solved: SOLVED, stickers: 48 },
+type Phase = { name: string; steps: number[]; tone: string }
+export type Kit = { size: Size; stages: typeof STAGES; phases: Phase[]; art: { pattern: string; view: string }[]; hold: Record<Face, string>; solved: State; stickers: number }
+// Target art for the reduction steps, drawn on an N×N face, then the 3×3 steps
+const bigArt = (N: number) => {
+  const face = (fill: (r: number, c: number) => string) => Array.from({ length: N * N }, (_, i) => fill((i / N) | 0, i % N)).join('')
+  const inner = (r: number, c: number) => r > 0 && r < N - 1 && c > 0 && c < N - 1
+  const center = (col: string) => face((r, c) => (inner(r, c) ? col : '_'))
+  return [
+    { pattern: center('w'), view: 'Bottom' }, { pattern: center('y'), view: 'Top' }, { pattern: center('g'), view: 'Front' },
+    { pattern: face((r, c) => (inner(r, c) || (r === 0 && c > 0 && c < N - 1) ? 'g' : '_')), view: 'Front' },
+    ...STEP_ART,
+  ]
+}
+const bigKit = (N: 4 | 5): Kit => ({
+  size: N, stages: STAGES_BIG, solved: bigCube(N).SOLVED, stickers: N === 4 ? 96 : 144, hold: N === 4 ? HOLD2 : HOLD, art: bigArt(N),
+  phases: [{ name: 'Centers', steps: [0, 1, 2], tone: 'w' }, { name: 'Edges', steps: [3], tone: 'g' }, { name: 'Solve it like a 3×3', steps: [4, 5, 6, 7, 8, 9, 10, 11], tone: 'y' }],
+})
+export const KIT: Record<Size, Kit> = {
+  3: { size: 3, stages: STAGES, phases: PHASES, art: STEP_ART, hold: HOLD, solved: SOLVED, stickers: 48 },
   2: {
-    size: 2 as Size, stages: STAGES2, solved: SOLVED2, stickers: 24, hold: HOLD2,
+    size: 2, stages: STAGES2, solved: SOLVED2, stickers: 24, hold: HOLD2,
     phases: [{ name: 'First layer', steps: [0], tone: 'w' }, { name: 'Last layer', steps: [1, 2], tone: 'y' }],
     art: [{ pattern: 'wwww', view: 'Bottom' }, { pattern: '????', view: 'Top' }, { pattern: 'yyyy', view: 'Top' }],
   },
+  4: bigKit(4),
+  5: bigKit(5),
 }
 export const phaseOf = (step: number, phases = PHASES) => phases.findIndex(p => p.steps.includes(step))
 export const colorName = (c: string) => NAME[c] ?? 'blank'

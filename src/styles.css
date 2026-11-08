@@ -329,7 +329,10 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 24px 64px; }
 .editor-head h2 { display: flex; align-items: center; gap: 10px; }
 .dot { width: 22px; height: 22px; border: 2.5px solid var(--ink); border-radius: 6px; }
 .big-face { --s: clamp(70px, 9vw, 100px); display: grid; grid-template-columns: repeat(var(--n, 3), var(--s)); gap: 8px; padding: 10px; background: var(--solid); border-radius: 18px; touch-action: none; user-select: none; animation: face-in 0.45s var(--ease); }
-.big-face.two { --n: 2; --s: clamp(100px, 13vw, 144px); }
+.big-face.n2 { --n: 2; --s: clamp(100px, 13vw, 144px); }
+.big-face.n4 { --n: 4; --s: clamp(54px, 6.6vw, 76px); gap: 6px; }
+.big-face.n5 { --n: 5; --s: clamp(44px, 5.4vw, 62px); gap: 5px; }
+.big-face.n5 .big-st.center span { display: none; } /* too small for the label; the dot in the heading names it */
 @keyframes face-in { from { transform: perspective(700px) rotateY(-28deg) scale(0.92); opacity: 0; } }
 .big-st { width: var(--s); height: var(--s); border: 0; border-radius: 11px; padding: 0; transition: background 0.18s, transform 0.12s var(--ease); }
 button.big-st:hover { transform: scale(0.95); }
@@ -341,6 +344,7 @@ button.big-st:active { transform: scale(0.88); }
 .swatch:hover { transform: translate(calc(-2px * var(--lx)), -2px); box-shadow: calc(5px * var(--lx)) 5px 0 var(--drop); }
 .swatch[aria-checked='true'] { transform: translate(calc(-3px * var(--lx)), -5px); box-shadow: 0 0 0 3px var(--card), 0 0 0 6px var(--ink), calc(4px * var(--lx)) 8px 0 6px var(--ink); }
 .count { font: 800 0.66rem var(--display); background: var(--solid); color: #fff; padding: 1px 5px; border-radius: 5px; }
+.palette.big .count { font-size: 0.56rem; padding: 1px 3px; letter-spacing: -0.02em; } /* "25/25" fits under the swatch */
 .editor-foot { justify-self: stretch; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; }
 .stage-actions { display: grid; gap: 12px; padding: 18px; border-top: var(--line); }
 .stage-actions .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }

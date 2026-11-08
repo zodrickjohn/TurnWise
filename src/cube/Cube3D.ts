@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { BASE, FRAME, STICKERS, isCorner, move, type Face, type Size, type State } from './model.ts'
+import { bigCube, turnOf } from './big.ts'
 
 export const HEX: Record<string, string> = { w: '#f6f6f2', y: '#ffd60a', r: '#f0302a', o: '#ff8a00', g: '#00c46a', b: '#2f6bff', _: '#3a3f4b' }
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -40,6 +41,8 @@ export class Cube3D {
   private controls?: OrbitControls
   private ro: ResizeObserver
   private host: HTMLElement
+  private size: Size = 3
+  private turn: (s: State, m: string) => State = move
 
   constructor(host: HTMLElement, state: State, interactive = true, followPointer = false, size: Size = 3) {
     this.host = host
@@ -50,7 +53,8 @@ export class Cube3D {
     scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture
     this.sun.position.set(3, 6, 4)
     this.rig.add(this.group)
-    if (size === 2) this.group.scale.setScalar(1.4) // fill about the same space as a 3x3
+    this.size = size
+    this.group.scale.setScalar({ 2: 1.4, 3: 1, 4: 0.78, 5: 0.64 }[size]) // every size fills about the same space
     scene.add(this.sun, this.rig)
     camera.position.set(5.2, 4.3, 7.4).setLength(DIST)
     camera.lookAt(0, 0, 0)
@@ -59,8 +63,11 @@ export class Cube3D {
     const bodyMat = new THREE.MeshStandardMaterial({ color: '#0e0f12', roughness: 0.45 })
     const sticker = roundedSquare(0.41, 0.1)
     const byPos = new Map<string, THREE.Mesh>()
-    const gap = size === 2 ? 0.5 : 1 // a 2x2 is the 8 corner cubies pulled in to touch
-    STICKERS.forEach(({ pos, normal }, i) => {
+    // A 2x2 is the 8 corner cubies pulled in to touch; 4x4 and 5x5 come from the N×N model in doubled coordinates
+    const big = size > 3 ? bigCube(size) : null
+    if (big) this.turn = big.move
+    const gap = size === 3 ? 1 : 0.5
+    ;(big ? big.STICKERS : STICKERS).forEach(({ pos, normal }, i) => {
       if (size === 2 && !isCorner(i)) return
       let c = byPos.get(pos.join())
       if (!c) {
@@ -139,23 +146,25 @@ export class Cube3D {
   // Animate one move (queued); ms = 0 applies it instantly
   play(m: string, ms = 520) {
     return (this.queue = this.queue.then(() => new Promise<void>(done => {
-      const next = move(this.state, m)
+      const next = this.turn(this.state, m)
       if (!ms) return done(this.setState(next))
-      const [axis, layer, sin] = BASE[m[0]]
-      const amount = m.endsWith('2') ? 2 : m.endsWith("'") ? -1 : 1
+      // Which cubies turn, about which axis and how far: the 3x3 table, or the N×N notation (slices, wide turns, x y z)
+      const t = this.size > 3 ? turnOf(this.size, m) : null
+      const [axis, layer, sin] = t ? [t.axis, null, t.sine] : BASE[m[0]]
+      const amount = t ? (t.amount === 3 ? -1 : t.amount) : m.endsWith('2') ? 2 : m.endsWith("'") ? -1 : 1
       const pivot = new THREE.Group()
       this.group.add(pivot)
-      const layerCubies = this.cubies.filter(c => layer === null || c.userData.home[axis] === layer)
+      const layerCubies = this.cubies.filter(c => (t ? t.layers.includes(c.userData.home[axis]) : layer === null || c.userData.home[axis] === layer))
       layerCubies.forEach(c => pivot.attach(c))
       const angle = (sin * amount * Math.PI) / 2
       const dur = ms * (amount === 2 ? 1.4 : 1)
       const t0 = performance.now()
       const lift = layer === null ? 0 : layer * 0.09
       this.tween = now => {
-        const t = Math.min(1, (now - t0) / dur)
-        pivot.rotation[(['x', 'y', 'z'] as const)[axis]] = angle * ease(t)
-        pivot.position.setComponent(axis, lift * Math.sin(Math.PI * t)) // turning layer lifts out slightly
-        if (t < 1) return
+        const k = Math.min(1, (now - t0) / dur)
+        pivot.rotation[(['x', 'y', 'z'] as const)[axis]] = angle * ease(k)
+        pivot.position.setComponent(axis, lift * Math.sin(Math.PI * k)) // turning layer lifts out slightly
+        if (k < 1) return
         layerCubies.forEach(c => { this.group.add(c); c.position.set(...(c.userData.at as [number, number, number])); c.quaternion.identity() })
         this.group.remove(pivot)
         this.tween = null

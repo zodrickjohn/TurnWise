@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { Cube3D } from '../cube/Cube3D.ts'
 import { FACES, SOLVED, cornersOnly, move, scramble, type Face, type Size, type State } from '../cube/model.ts'
-import { validate } from '../cube/solver.ts'
+import { bigCube, bigScramble } from '../cube/big.ts'
+import { validateAny } from '../cube/bigsolve.ts'
 import { CubeView, Icon, KIT, LABEL, Mini, ORDER, colorName } from '../ui.tsx'
 import Scanner from './Scanner.tsx'
 import { Coach } from '../Coach.tsx'
@@ -10,13 +11,16 @@ const PALETTE = ['w', 'y', 'r', 'o', 'g', 'b']
 
 // repair: set while checking the real cube against a solve in progress; it returns to the solve
 // setSize: switch between 3x3 and 2x2 (left out while repairing, the size is the solve's)
-type Props = { paint: State; setPaint: Dispatch<SetStateAction<State>>; blank: State; onSubmit: (s: State) => void; repair?: () => void; size: Size; setSize?: (s: Size) => void }
-export const faceOf = (s: State, f: Face) => s.slice(FACES.indexOf(f) * 9, FACES.indexOf(f) * 9 + 9)
-const CELLS: Record<Size, number[]> = { 3: [0, 1, 2, 3, 4, 5, 6, 7, 8], 2: [0, 2, 6, 8] } // positions on a face that a cube of this size has
+type Props = { paint: State; setPaint: Dispatch<SetStateAction<State>>; blank: State; onSubmit: (s: State) => void | Promise<void>; repair?: () => void; size: Size; setSize?: (s: Size) => void }
+export const faceOf = (s: State, f: Face, per = 9) => s.slice(FACES.indexOf(f) * per, FACES.indexOf(f) * per + per)
+const range = (n: number) => Array.from({ length: n }, (_, i) => i)
+const CELLS: Record<Size, number[]> = { 2: [0, 2, 6, 8], 3: range(9), 4: range(16), 5: range(25) } // positions on a face that a cube of this size has (a 2×2 lives in the 3×3 layout)
+export const FIXED: Record<Size, number> = { 2: -1, 3: 4, 4: -1, 5: 12 } // the fixed center on odd cubes
 
 export default function Input({ paint, setPaint, blank, onSubmit, repair, size, setSize }: Props) {
-  const K = KIT[size], cells = CELLS[size], total = K.stickers
-  const ofFace = (f: Face) => cells.map(n => faceOf(paint, f)[n])
+  const K = KIT[size], cells = CELLS[size], total = K.stickers, per = size > 3 ? size * size : 9, fixed = FIXED[size]
+  const ofFace = (f: Face) => cells.map(n => faceOf(paint, f, per)[n])
+  const [planning, setPlanning] = useState(false)
   const cube = useRef<Cube3D>(null)
   const [color, setColor] = useState('w')
   const [face, setFace] = useState<Face>('F')
@@ -35,16 +39,17 @@ export default function Input({ paint, setPaint, blank, onSubmit, repair, size, 
     return () => { removeEventListener('keydown', key); removeEventListener('pointerup', up) }
   }, [])
 
-  const base = FACES.indexOf(face) * 9
+  const base = FACES.indexOf(face) * per
   const paintAt = (i: number) => { setPaint(p => (p[i] === color ? p : p.map((c, j) => (j === i ? color : c)))); setError('') }
-  const fillRest = () => setPaint(p => p.map((c, j) => (j >= base && j < base + 9 && cells.includes(j - base) && c === '_' ? color : c)))
+  const fillRest = () => setPaint(p => p.map((c, j) => (j >= base && j < base + per && cells.includes(j - base) && c === '_' ? color : c)))
   const submit = () => {
-    const problem = validate(paint, size)
+    const problem = validateAny(paint, size)
     if (problem) return setError(problem)
-    try { onSubmit(paint) } catch (e) { setError((e as Error).message) }
+    setPlanning(true) // big cubes plan in the background for a second or two
+    Promise.resolve().then(() => onSubmit(paint)).catch(e => setError((e as Error).message)).finally(() => setPlanning(false))
   }
 
-  const painted = paint.filter((c, i) => c !== '_' && i % 9 !== 4).length
+  const painted = paint.filter((c, i) => c !== '_' && i % per !== fixed).length
   const doneFaces = ORDER.filter(f => !ofFace(f).includes('_'))
   const doneCount = useRef(doneFaces.length)
   useEffect(() => {
@@ -69,14 +74,14 @@ export default function Input({ paint, setPaint, blank, onSubmit, repair, size, 
         ) : (
           <header className="page-head">
             <h1>Paint your cube</h1>
-            <p className="lede">{size === 3
+            <p className="lede">{fixed >= 0
               ? 'Go face by face. Pick a color, then tap or drag across the stickers that match your cube. Centers are already set.'
-              : 'A 2×2 has no centers, so pick a grip and keep it. Then go face by face: pick a color and tap or drag across the matching stickers.'}</p>
+              : `A ${size}×${size} has no fixed centers, so pick a grip and keep it. Then go face by face: pick a color and tap or drag across the matching stickers.`}</p>
           </header>
         )}
         {setSize && (
           <div className="mode-switch" role="radiogroup" aria-label="Cube size">
-            {([3, 2] as const).map(n => <button key={n} role="radio" aria-checked={size === n} onClick={() => { setSize(n); setFace('F'); setError('') }}>{n}×{n}</button>)}
+            {([2, 3, 4, 5] as const).map(n => <button key={n} role="radio" aria-checked={size === n} onClick={() => { setSize(n); setFace('F'); setError('') }}>{n}×{n}</button>)}
           </div>
         )}
 
@@ -118,13 +123,13 @@ export default function Input({ paint, setPaint, blank, onSubmit, repair, size, 
 
         <section className="panel editor" aria-label={`${LABEL[face]} face`}>
           <div className="editor-head">
-            <h2>{size === 3 && <span className={'dot c-' + paint[base + 4]} />}{LABEL[face]} face</h2>
+            <h2>{fixed >= 0 && <span className={'dot c-' + paint[base + fixed]} />}{LABEL[face]} face</h2>
             <p>{K.hold[face]}</p>
           </div>
-          <div className={'big-face' + (size === 2 ? ' two' : '')} key={face + size} onPointerLeave={() => (dragging.current = false)}>
+          <div className={'big-face n' + size} key={face + size} onPointerLeave={() => (dragging.current = false)}>
             {cells.map(n => {
               const i = base + n, c = paint[i]
-              return n === 4 && size === 3 ? (
+              return n === fixed ? (
                 <span key={n} className={'big-st center c-' + c} title={`Center: ${colorName(c)}`}><span>center</span></span>
               ) : (
                 <button
@@ -138,7 +143,7 @@ export default function Input({ paint, setPaint, blank, onSubmit, repair, size, 
               )
             })}
           </div>
-          <div className="palette" role="radiogroup" aria-label="Paint color">
+          <div className={"palette" + (size > 3 ? " big" : "")} role="radiogroup" aria-label="Paint color">
             {PALETTE.map((c, n) => (
               <button key={c} role="radio" aria-checked={color === c} className={'swatch c-' + c} onClick={() => setColor(c)} title={`${colorName(c)} (key ${n + 1})`}>
                 <span className="count">{paint.filter(x => x === c).length}/{size * size}</span>
@@ -148,11 +153,11 @@ export default function Input({ paint, setPaint, blank, onSubmit, repair, size, 
           </div>
           <div className="editor-foot">
             <button className="btn white" disabled={k === 0} onClick={() => setFace(ORDER[k - 1])}>Previous face</button>
-            {blanksHere > 0 && blanksHere < cells.length - (size === 3 ? 1 : 0) && <button className="btn ghost" onClick={fillRest}>Fill {blanksHere} blank{blanksHere > 1 ? 's' : ''} with {colorName(color)}</button>}
+            {blanksHere > 0 && blanksHere < cells.length - (fixed >= 0 ? 1 : 0) && <button className="btn ghost" onClick={fillRest}>Fill {blanksHere} blank{blanksHere > 1 ? 's' : ''} with {colorName(color)}</button>}
             {k < 5 ? (
               <button className={'btn yellow' + (faceDone ? ' nudge' : '')} onClick={() => setFace(ORDER[k + 1])}>Next: {LABEL[ORDER[k + 1]]} <Icon name="arrow" size={18} /></button>
             ) : (
-              <button className={'btn yellow' + (painted === total ? ' nudge' : '')} onClick={submit}>{repair ? 'Check my cube' : 'Solve my cube'} <Icon name="arrow" size={18} /></button>
+              <button className={'btn yellow' + (painted === total ? ' nudge' : '')} onClick={submit} disabled={planning}>{planning ? 'Planning your solve…' : repair ? 'Check my cube' : 'Solve my cube'} <Icon name="arrow" size={18} /></button>
             )}
           </div>
         </section>
@@ -169,9 +174,9 @@ export default function Input({ paint, setPaint, blank, onSubmit, repair, size, 
                 : painted === total ? (repair ? "All in! Hit Check and I'll find the slip." : `All ${total} stickers in! Hit Solve when ready.`)
                 : justDone ? `${LABEL[justDone]} face done! ${total - painted} to go.`
                 : `${total - painted} stickers to go. Tip: keys 1 to 6 switch colors.`} />
-            <button className="btn yellow wide" onClick={submit}>{repair ? 'Check my cube' : painted < total ? `Solve my cube (${total - painted} to go)` : 'Solve my cube'}</button>
+            <button className="btn yellow wide" onClick={submit} disabled={planning}>{planning ? 'Planning your solve…' : repair ? 'Check my cube' : painted < total ? `Solve my cube (${total - painted} to go)` : 'Solve my cube'}</button>
             {!repair && <div className="row">
-              <button className="btn white" onClick={() => { const s = move(SOLVED, scramble()); setPaint(size === 3 ? s : cornersOnly(s)); setError('') }}>Use a random cube</button>
+              <button className="btn white" onClick={() => { const s = size > 3 ? bigCube(size).move(bigCube(size).SOLVED, bigScramble()) : move(SOLVED, scramble()); setPaint(size === 2 ? cornersOnly(s) : s); setError('') }}>Use a random cube</button>
               <button className="btn ghost" onClick={() => { setPaint(blank); setError(''); setFace('F') }}>Clear all</button>
             </div>}
           </div>

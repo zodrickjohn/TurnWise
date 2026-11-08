@@ -28,7 +28,7 @@ export default function Solve({ puzzle: { start, plan, size }, again, practice, 
 
   // Every move with its place in the plan, the cube state before it, and its tile color
   const { moves, states, colors, lineStart } = useMemo(() => {
-    const { moves, states } = timeline(start, plan)
+    const { moves, states } = timeline(start, plan, size)
     const lineStart = new Map<string, number>()
     moves.forEach((t, i) => { const k = `${t.stage}.${t.chunk}.${t.line}`; if (!lineStart.has(k)) lineStart.set(k, i) })
     return { moves, states, lineStart, colors: moves.map((t, k) => faceColor(states[k], t.m)) }
@@ -151,7 +151,7 @@ export default function Solve({ puzzle: { start, plan, size }, again, practice, 
               {SPEEDS.map(([label, ms]) => <button key={label} role="radio" aria-checked={speed === ms} onClick={() => setSpeed(ms)}>{label}</button>)}
               <span className="keys"><kbd className="key">←</kbd> <kbd className="key">→</kbd> step, <kbd className="key">space</kbd> plays</span>
             </div>
-            {!done && (
+            {!done && size < 4 && (
               <button className="mismatch" onClick={() => onMismatch(states[pos], pos)}>
                 <Icon name="search" size={18} /> My cube doesn't match the screen
               </button>
@@ -165,7 +165,7 @@ export default function Solve({ puzzle: { start, plan, size }, again, practice, 
               <Confetti />
               <span className="stamp">Solved</span>
               <h1>{moves.length} moves. Every one of them yours.</h1>
-              <p className="lede">That's the whole beginner's method{size === 2 ? ' for the 2×2' : ''}. Scramble your cube and go again: this time read "What to look for" before you press play, and try to predict each move.</p>
+              <p className="lede">That's the whole beginner's method{size !== 3 ? ` for the ${size}×${size}` : ''}. Scramble your cube and go again: this time read "What to look for" before you press play, and try to predict each move.</p>
               <div className="actions">
                 <button className="btn yellow" onClick={again}>Solve another cube <Icon name="arrow" size={18} /></button>
                 <button className="btn white" onClick={practice}>Practice a step on your own</button>
@@ -184,7 +184,7 @@ export default function Solve({ puzzle: { start, plan, size }, again, practice, 
               </header>
               <p className="lede goal">{info.goal}</p>
               {notice && pos === resumed ? <p className="hold" role="status">{notice}</p>
-                : pos === 0 ? <p className="hold">{size === 3 ? <>Hold your cube with <b>yellow on top</b> and <b>green facing you</b>, then follow along.</> : <>Hold your cube <b>the way you painted it</b>, then follow along.</>}</p>
+                : pos === 0 ? <p className="hold">{size % 2 ? <>Hold your cube with <b>yellow on top</b> and <b>green facing you</b>, then follow along.</> : <>Hold your cube <b>the way you painted it</b>, then follow along.</>}</p>
                 : pos === resumed && <p className="hold">Welcome back. Your cube is where you left it at step {stage + 1}. Make sure your real cube matches the one on screen.</p>}
               <div className="explain">
                 <section className="panel">

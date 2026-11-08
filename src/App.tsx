@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react'
 import { flushSync } from 'react-dom'
 import { SOLVED, cornersOnly, type Size, type State } from './cube/model.ts'
-import { diagnose, normalize, prepare, solve, timeline, validate, type Chunk } from './cube/solver.ts'
+import { diagnose, normalize, solve, timeline, validate, type Chunk } from './cube/solver.ts'
+import { prepareAny, validateAny } from './cube/bigsolve.ts'
+import { bigCube } from './cube/big.ts'
 import { Icon, colorName, load, reduceMotion, save, toTop } from './ui.tsx'
 import { themeShow } from './themeShow.ts'
 import Home from './views/Home.tsx'
@@ -13,23 +15,41 @@ import Practice from './views/Practice.tsx'
 export type View = 'home' | 'learn' | 'input' | 'solve' | 'practice'
 export type Puzzle = { start: State; plan: Chunk[][]; size: Size }
 type Theme = 'light' | 'dark'
-const BLANK = SOLVED.map((c, i) => (i % 9 === 4 ? c : '_'))
-const BLANK2 = SOLVED.map(() => '_')
-const sizeOf = (v: unknown): Size => (v === 2 ? 2 : 3)
-const isCube = (s: unknown): s is State => Array.isArray(s) && s.length === 54 && s.every(c => typeof c === 'string' && 'wyrogb_'.includes(c))
-
-// Rebuild a saved puzzle only if it is still a valid cube
-function restorePuzzle(): Puzzle | null {
-  const start = load<unknown>('start', null), size = sizeOf(load('startSize', 3))
-  try { return isCube(start) && !validate(start, size) ? { start, plan: solve(start, size), size } : null } catch { return null }
+// Empty paint boards: odd cubes keep their fixed centers, 2×2 and 4×4 start fully blank
+const BLANKS: Record<Size, State> = {
+  2: SOLVED.map(() => '_'),
+  3: SOLVED.map((c, i) => (i % 9 === 4 ? c : '_')),
+  4: bigCube(4).SOLVED.map(() => '_'),
+  5: bigCube(5).SOLVED.map((c, i) => (i % 25 === 12 ? c : '_')),
 }
+const SIZES: Size[] = [2, 3, 4, 5]
+const sizeOf = (v: unknown): Size => (SIZES.includes(v as Size) ? (v as Size) : 3)
+const isCube = (s: unknown, size: Size): s is State => Array.isArray(s) && s.length === BLANKS[size].length && s.every(c => typeof c === 'string' && 'wyrogb_'.includes(c))
+const PAINT_KEY = (n: Size) => (n === 3 ? 'paint' : 'paint' + n)
+
+// Rebuild a saved puzzle only if it is still a valid cube; big cubes keep their saved plan (re-planning one takes seconds)
+function restorePuzzle(): Puzzle | null {
+  const start = load<unknown>('start', null), size = sizeOf(load('startSize', 3)), plan = load<Chunk[][] | null>('plan', null)
+  try {
+    if (!isCube(start, size) || validateAny(start, size)) return null
+    return size > 3 ? (Array.isArray(plan) ? { start, plan, size } : null) : { start, plan: solve(start, size), size }
+  } catch { return null }
+}
+
+// Plan a solve; 4×4 and 5×5 plan in a worker so the page stays responsive while it thinks
+const planSolve = (cube: State, size: Size) => size < 4 ? Promise.resolve(prepareAny(cube, size)) : new Promise<ReturnType<typeof prepareAny>>((ok, fail) => {
+  const w = new Worker(new URL('./cube/worker.ts', import.meta.url), { type: 'module' })
+  w.onmessage = e => { w.terminate(); e.data.error ? fail(new Error(e.data.error)) : ok(e.data) }
+  w.onerror = e => { w.terminate(); fail(new Error(e.message || 'Planning failed. Try again.')) }
+  w.postMessage({ cube, size })
+})
 const JOURNEY: [View, string, string][] = [['learn', 'Learn the moves', 'Learn'], ['input', 'Paint your cube', 'Paint'], ['solve', 'Solve it', 'Solve'], ['practice', 'Practice', 'Practice']]
 
 export default function App() {
   const [view, setView] = useState<View>('home')
   const [size, setSize] = useState<Size>(() => sizeOf(load('size', 3))) // the cube being painted or practiced
-  const [paint3, setPaint3] = useState<State>(() => { const p = load<unknown>('paint', BLANK); return isCube(p) ? p : BLANK })
-  const [paint2, setPaint2] = useState<State>(() => { const p = load<unknown>('paint2', BLANK2); return isCube(p) ? p : BLANK2 })
+  const [paints, setPaints] = useState(() => Object.fromEntries(SIZES.map(n => { const p = load<unknown>(PAINT_KEY(n), null); return [n, isCube(p, n) ? p : BLANKS[n]] })) as Record<Size, State>)
+  const setPaintOf = (n: Size) => (u: State | ((p: State) => State)) => setPaints(all => ({ ...all, [n]: typeof u === 'function' ? u(all[n]) : u }))
   const [puzzle, setPuzzle] = useState<Puzzle | null>(restorePuzzle)
   const [visited, setVisited] = useState<Set<View>>(() => new Set(load<View[]>('visited', [])))
   const [repair, setRepair] = useState<number | null>(null) // solve position being checked against the real cube
@@ -37,11 +57,11 @@ export default function App() {
   const [notice, setNotice] = useState<string>()
   const [session, setSession] = useState(0)
   const [theme, setTheme] = useState<Theme>(() => load<Theme>('theme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'))
-  useEffect(() => { save('paint', paint3); save('paint2', paint2); save('size', size) }, [paint3, paint2, size])
-  useEffect(() => { save('start', puzzle?.start ?? null); save('startSize', puzzle?.size ?? 3) }, [puzzle])
+  useEffect(() => { SIZES.forEach(n => save(PAINT_KEY(n), paints[n])); save('size', size) }, [paints, size])
+  useEffect(() => { save('start', puzzle?.start ?? null); save('startSize', puzzle?.size ?? 3); save('plan', puzzle && puzzle.size > 3 ? puzzle.plan : null) }, [puzzle])
   // While repairing, the paint screen shows the solve's size
   const paintSize = repair !== null && puzzle ? puzzle.size : size
-  const [paint, setPaint] = paintSize === 2 ? [paint2, setPaint2] : [paint3, setPaint3]
+  const paint = paints[paintSize], setPaint = setPaintOf(paintSize)
   useEffect(() => { save('visited', [...visited]) }, [visited])
   useEffect(() => { document.documentElement.dataset.theme = theme; save('theme', theme) }, [theme])
 
@@ -98,11 +118,11 @@ export default function App() {
 
   // Paint screen submit: a new cube, or the real cube checked against the solve in progress
   const submit = (actual: State) => {
-    if (repair === null || !puzzle) return openSolve({ ...prepare(actual, size), size })
+    if (repair === null || !puzzle) return planSolve(actual, size).then(p => openSolve({ ...p, size }))
     const { states } = timeline(puzzle.start, puzzle.plan)
     const d = diagnose(states, repair, actual, puzzle.size)
     const grip = puzzle.size === 2 ? ' Keep holding your cube the way you painted it.' : ''
-    if (d.kind === 'new') return openSolve({ ...prepare(actual, puzzle.size), size: puzzle.size }, undefined,
+    if (d.kind === 'new') return openSolve({ ...prepareAny(actual, puzzle.size), size: puzzle.size }, undefined,
       "Your cube didn't match any point in the plan, so here's a fresh one from where your cube is now. Finished steps are skipped." + (grip || ' Hold yellow on top and green facing you.'))
     const hold = grip || ` Hold your cube with yellow on top and ${colorName(states[d.at][22])} facing you.`
     const gap = Math.abs(repair - d.at)
@@ -143,17 +163,17 @@ export default function App() {
         {view === 'home' && <Home go={go} resume={!!puzzle} />}
         {view === 'learn' && <Learn go={go} />}
         {view === 'input' && (
-          <Input paint={paint} setPaint={setPaint} blank={paintSize === 2 ? BLANK2 : BLANK} onSubmit={submit} size={paintSize}
+          <Input paint={paint} setPaint={setPaint} blank={BLANKS[paintSize]} onSubmit={submit} size={paintSize}
             setSize={repair === null ? setSize : undefined}
             repair={repair !== null ? () => go('solve', () => setRepair(null)) : undefined} />
         )}
         {view === 'solve' && puzzle && (
           <Solve key={`${puzzle.start.join('')}-${session}`} puzzle={puzzle} fix={fix} notice={notice}
-            again={() => go('input', () => { setSize(puzzle.size); puzzle.size === 2 ? setPaint2(BLANK2) : setPaint3(BLANK); setRepair(null) })}
+            again={() => go('input', () => { setSize(puzzle.size); setPaintOf(puzzle.size)(BLANKS[puzzle.size]); setRepair(null) })}
             practice={() => go('practice')}
-            onMismatch={(expected, pos) => go('input', () => { puzzle.size === 2 ? setPaint2(cornersOnly(expected)) : setPaint3(normalize(expected)); setRepair(pos) })} />
+            onMismatch={(expected, pos) => go('input', () => { setPaintOf(puzzle.size)(puzzle.size === 2 ? cornersOnly(expected) : normalize(expected)); setRepair(pos) })} />
         )}
-        {view === 'practice' && <Practice key={size} size={size} setSize={setSize} painted={paint3.includes('_') || validate(paint3) ? undefined : paint3} />}
+        {view === 'practice' && <Practice key={size} size={size > 3 ? 3 : size} setSize={setSize} painted={paints[3].includes('_') || validate(paints[3]) ? undefined : paints[3]} />}
       </main>
     </>
   )

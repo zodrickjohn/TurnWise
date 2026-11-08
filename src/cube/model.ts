@@ -53,7 +53,7 @@ export const SCHEME: Record<Face, string> = { U: 'y', R: 'o', F: 'g', D: 'w', L:
 export const SOLVED: State = STICKERS.map(s => SCHEME[s.face])
 export const home = (s: State, i: number) => s[((i / 9) | 0) * 9 + 4]
 export const isSolved = (s: State) => s.every((c, i) => c === '_' || c === home(s, i)) // '_' = not part of this puzzle (2x2 edges)
-export type Size = 2 | 3
+export type Size = 2 | 3 | 4 | 5
 // A 2x2 is the 8 corners of a 3x3: same moves, edges blank; centers are an invisible frame the solver picks
 export const isCorner = (i: number) => [0, 2, 6, 8].includes(i % 9)
 export const cornersOnly = (s: State) => s.map((c, i) => (isCorner(i) ? c : '_'))
