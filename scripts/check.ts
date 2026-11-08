@@ -74,3 +74,11 @@ for (let k = 0; k < 8; k++) for (let i = 0; i < 20; i++) {
   assert(toMoves(setup).length <= 40, `setup for step ${k + 1} is short: ${setup}`)
 }
 console.log('practice setups ok:', [0, 1, 2, 3, 4, 5, 6, 7].map(k => toMoves(practiceSetup(k).setup).length).join(' / '), 'moves')
+import { practiceFrom } from '../src/cube/solver.ts'
+for (let k = 0; k < 8; k++) {
+  const cubeNow = move(SOLVED, scramble())
+  const { start, par } = practiceFrom(cubeNow, k)
+  assert(k === 0 || stageDone(k - 1, start), `from a scramble, steps before ${k + 1} are done`)
+  assert(par === 0 ? stageDone(k, start) : !stageDone(k, start))
+}
+console.log('practice from a scrambled cube ok')

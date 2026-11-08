@@ -282,3 +282,11 @@ export function practiceSetup(k: number) {
   }
   throw new Error('No practice setup found')
 }
+
+// From any cube (e.g. a scanned scramble): the guide's steps before k as setup moves, then step k is left to practice
+export function practiceFrom(cube: State, k: number) {
+  const setup = simplify(solve(cube).slice(0, k).flatMap(chunks => chunks.flatMap(ch => ch.lines.map(l => l.alg))).join(' '))
+  const start = move(cube, setup)
+  const par = toMoves(solve(start)[k].flatMap(ch => ch.lines.map(l => l.alg)).join(' ')).length
+  return { setup, start, par }
+}
