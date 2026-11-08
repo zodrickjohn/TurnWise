@@ -37,14 +37,18 @@ function restorePuzzle(): Puzzle | null {
   } catch { return null }
 }
 
+// Each page has its own address, so Back, Forward and refresh land where people expect
+const ROUTE: Record<View, string> = { home: '', learn: 'learn', input: 'paint', solve: 'solve', practice: 'practice' }
+const fromHash = (): View => (Object.keys(ROUTE) as View[]).find(v => ROUTE[v] && location.hash === '#/' + ROUTE[v]) ?? 'home'
+const urlOf = (v: View) => (ROUTE[v] ? '#/' + ROUTE[v] : location.pathname + location.search)
 const JOURNEY: [View, string, string][] = [['learn', 'Learn the moves', 'Learn'], ['input', 'Paint your cube', 'Paint'], ['solve', 'Solve it', 'Solve'], ['practice', 'Practice', 'Practice']]
 
 export default function App() {
   const [size, setSize] = useState<Size>(() => sizeOf(load('size', 3))) // the cube being painted or practiced
-  const [view, setView] = useState<View>('home')
   const [paints, setPaints] = useState(() => Object.fromEntries(SIZES.map(n => { const p = load<unknown>(PAINT_KEY(n), null); return [n, isCube(p, n) ? p : BLANKS[n]] })) as Record<Size, State>)
   const setPaintOf = (n: Size) => (u: State | ((p: State) => State)) => setPaints(all => ({ ...all, [n]: typeof u === 'function' ? u(all[n]) : u }))
   const [puzzle, setPuzzle] = useState<Puzzle | null>(restorePuzzle)
+  const [view, setView] = useState<View>(() => { const v = fromHash(); return v === 'solve' && !puzzle ? 'home' : v }) // a refresh keeps the page
   const [visited, setVisited] = useState<Set<View>>(() => new Set(load<View[]>('visited', [])))
   const [repair, setRepair] = useState<number | null>(null) // solve position being checked against the real cube
   const [fix, setFix] = useState<Fix>()
@@ -60,7 +64,15 @@ export default function App() {
   useEffect(() => { document.documentElement.dataset.theme = theme; save('theme', theme) }, [theme])
 
   // Page changes cross-fade via the View Transitions API where supported
-  const go = (v: View, then?: () => void) => {
+  // back: set when the browser moved through history (Back / Forward); the page then returns to where it was scrolled
+  const scrollBack = useRef(0)
+  const go = (v: View, then?: () => void, back?: { y: number }) => {
+    if (!back) {
+      if (v === view && !then) return
+      history.replaceState({ ...history.state, view, y: scrollY }, '') // remember where this page was scrolled
+      if (v !== view) history.pushState({ view: v }, '', urlOf(v))
+    }
+    scrollBack.current = back?.y ?? 0
     const swap = () => flushSync(() => {
       if (view === 'solve') { setFix(undefined); setNotice(undefined) } // one-time messages end when leaving the solve
       then?.()
@@ -69,7 +81,22 @@ export default function App() {
     })
     document.startViewTransition ? document.startViewTransition(swap) : swap()
   }
-  useEffect(() => { toTop() }, [view])
+  useEffect(() => { const y = scrollBack.current; requestAnimationFrame(() => toTop(y)) }, [view])
+  // Back and Forward: show the page in the address; leaving the slip check ends it. A dialog's own entry is the dialog's business
+  const latest = useRef({ go, view, puzzle })
+  latest.current = { go, view, puzzle }
+  useEffect(() => {
+    history.replaceState({ view }, '', urlOf(view))
+    const pop = (e: PopStateEvent) => {
+      const { go, view, puzzle } = latest.current
+      let v = fromHash()
+      if (e.state?.modal || v === view) return
+      if (v === 'solve' && !puzzle) { v = 'home'; history.replaceState({ view: v }, '', urlOf(v)) }
+      go(v, () => setRepair(null), { y: e.state?.y ?? 0 })
+    }
+    addEventListener('popstate', pop)
+    return () => removeEventListener('popstate', pop)
+  }, [])
 
   // Theme = time of day. A click lets the CSS --t value travel to noon or night (sunset or sunrise);
   // dragging the toggle sideways scrubs --t directly, and letting go settles on the nearer end

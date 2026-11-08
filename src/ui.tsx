@@ -9,8 +9,8 @@ import { bigCube } from './cube/big.ts'
 export const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 // Wheel scrolling glides with a little inertia (touch stays native); off for people who prefer less motion
 export const lenis = reduceMotion ? null : new Lenis({ autoRaf: true, lerp: 0.085 })
-// Jump to the top at once, cancelling any glide still in flight
-export const toTop = () => (lenis ? lenis.scrollTo(0, { immediate: true, force: true }) : scrollTo(0, 0))
+// Jump to a scroll position at once (the top by default), cancelling any glide still in flight
+export const toTop = (y = 0) => (lenis ? (lenis.resize(), lenis.scrollTo(y, { immediate: true, force: true })) : scrollTo(0, y)) // re-measure first: the new page has a new height
 
 // Scroll reveals: only .reveal elements starting below the fold hide (.pre), then animate in (.in); returns a cleanup
 export function revealOnScroll() {

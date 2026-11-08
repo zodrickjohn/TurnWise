@@ -25,6 +25,10 @@ export default function Scanner({ start, onFaces, onClose, finish, size = 3 }: P
 
   useEffect(() => {
     dialog.current?.showModal()
+    // Back closes the scanner instead of leaving the page: the dialog gets its own history entry
+    history.pushState({ ...history.state, modal: true }, '')
+    const back = () => dialog.current?.close()
+    addEventListener('popstate', back)
     let alive = true, stream: MediaStream | undefined
     if (!navigator.mediaDevices?.getUserMedia) setError("This browser can't open the camera here. Paint the stickers by hand instead.")
     else navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false })
@@ -46,7 +50,7 @@ export default function Scanner({ start, onFaces, onClose, finish, size = 3 }: P
       const cell = (Math.min(w, h) * GUIDE) / n, x0 = (w - cell * n) / 2, y0 = (h - cell * n) / 2, r = cell * 0.2
       setLive(Array.from({ length: cells }, (_, i) => average(ctx.getImageData(x0 + ((i % n) + 0.5) * cell - r, y0 + (((i / n) | 0) + 0.5) * cell - r, 2 * r, 2 * r).data)))
     }, 220)
-    return () => { alive = false; clearInterval(timer); stream?.getTracks().forEach(t => t.stop()) }
+    return () => { alive = false; clearInterval(timer); stream?.getTracks().forEach(t => t.stop()); removeEventListener('popstate', back) }
   }, [])
 
   // Read every saved face together: shared lighting, fixed centers as anchors, and the N² cap once the cube is complete
@@ -72,7 +76,7 @@ export default function Scanner({ start, onFaces, onClose, finish, size = 3 }: P
   }
 
   return (
-    <dialog ref={dialog} className="scanner" onClose={onClose} aria-labelledby="scan-title">
+    <dialog ref={dialog} className="scanner" onClose={() => { if (history.state?.modal) history.back(); onClose() }} aria-labelledby="scan-title">
       <div className="scan-head">
         <div>
           <p className="step-of">{done ? 'All faces scanned' : `Face ${k + 1} of 6`}</p>
