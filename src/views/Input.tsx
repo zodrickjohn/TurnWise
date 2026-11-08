@@ -15,10 +15,9 @@ type Props = { paint: State; setPaint: Dispatch<SetStateAction<State>>; blank: S
 export const faceOf = (s: State, f: Face, per = 9) => s.slice(FACES.indexOf(f) * per, FACES.indexOf(f) * per + per)
 const range = (n: number) => Array.from({ length: n }, (_, i) => i)
 const CELLS: Record<Size, number[]> = { 2: [0, 2, 6, 8], 3: range(9), 4: range(16), 5: range(25) } // positions on a face that a cube of this size has (a 2×2 lives in the 3×3 layout)
-export const FIXED: Record<Size, number> = { 2: -1, 3: 4, 4: -1, 5: 12 } // the fixed center on odd cubes
 
 export default function Input({ paint, setPaint, blank, onSubmit, repair, size, setSize }: Props) {
-  const K = KIT[size], cells = CELLS[size], total = K.stickers, per = size > 3 ? size * size : 9, fixed = FIXED[size]
+  const K = KIT[size], cells = CELLS[size], total = K.stickers, { per, fixed } = K
   const ofFace = (f: Face) => cells.map(n => faceOf(paint, f, per)[n])
   const [planning, setPlanning] = useState(false)
   const cube = useRef<Cube3D>(null)
@@ -85,16 +84,17 @@ export default function Input({ paint, setPaint, blank, onSubmit, repair, size, 
           </div>
         )}
 
-        {size === 3 && <div className="scan-callout">
+        <div className="scan-callout">
           <p><b>Faster:</b> show each face to your camera and Turnwise reads the colors for you.</p>
           <button className="btn ink" onClick={() => setScanning(true)}><Icon name="camera" size={20} /> Scan with camera</button>
-        </div>}
+        </div>
         {scanning && (
           <Scanner
             start={face}
+            size={size}
             onClose={() => setScanning(false)}
             onFaces={(faces, next) => {
-              setPaint(p => p.map((c, i) => faces[FACES[(i / 9) | 0]]?.[i % 9] ?? c))
+              setPaint(p => p.map((c, i) => (i % per === fixed ? c : faces[FACES[(i / per) | 0]]?.[i % per] ?? c)))
               setFace(next)
               setError('')
             }}

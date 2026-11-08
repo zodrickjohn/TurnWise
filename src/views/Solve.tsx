@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Cube3D } from '../cube/Cube3D.ts'
 import { invertMove, move, toMoves, type State } from '../cube/model.ts'
 import { timeline } from '../cube/solver.ts'
+import { bigCube } from '../cube/big.ts'
 import { Confetti, CubeView, Icon, KIT, Mini, Tiles, describe, faceColor, load, phaseOf, save, toTop } from '../ui.tsx'
 import type { Puzzle } from '../App.tsx'
 import { Coach } from '../Coach.tsx'
@@ -14,6 +15,7 @@ type Props = { puzzle: Puzzle; again: () => void; practice: () => void; onMismat
 export default function Solve({ puzzle: { start, plan, size }, again, practice, onMismatch, fix, notice }: Props) {
   const { stages: STAGES, phases: PHASES, art: STEP_ART } = KIT[size]
   const last = STAGES.length - 1
+  const turnState = size > 3 ? bigCube(size).move : move
   const cube = useRef<Cube3D>(null)
   const busy = useRef(false)
   const key = start.join('')
@@ -137,9 +139,9 @@ export default function Solve({ puzzle: { start, plan, size }, again, practice, 
               sayKey={done ? 'done' : cleared >= 0 ? `clear-${cleared}` : pending ? 'fix' : pos}
               say={done ? 'Solved! Every one of those turns was yours.'
                 : cleared >= 0 ? <><b>Step {cleared + 1} done!</b> {STAGES[cleared].title} is complete.{cleared < last && <> Up next: {STAGES[cleared + 1].title}.</>}</>
-                : pending ? <span className="say-move"><Tiles alg={pending} colors={[faceColor(move(states[at], fix!.wrong), pending)]} at={0} size="xl" /><span><b>Fix first.</b> {describe(pending)}</span></span>
+                : pending ? <span className="say-move"><Tiles alg={pending} colors={[faceColor(turnState(states[at], fix!.wrong), pending)]} at={0} size="xl" /><span><b>Fix first.</b> {describe(pending)}</span></span>
                 : <span className="say-move"><Tiles alg={cur.m} colors={[colors[pos]]} at={0} size="xl" /><span>{describe(cur.m)}</span></span>} />
-            <CubeView cubeRef={cube} initial={fix ? move(states[at], fix.wrong) : states[at]} size={size} />
+            <CubeView cubeRef={cube} initial={fix ? turnState(states[at], fix.wrong) : states[at]} size={size} />
             <div className="transport">
               <button className="btn white icon" onClick={() => step(-1)} disabled={pos === 0 || !!pending} aria-label="Previous move (left arrow)"><Icon name="prev" /></button>
               {pending
@@ -151,7 +153,7 @@ export default function Solve({ puzzle: { start, plan, size }, again, practice, 
               {SPEEDS.map(([label, ms]) => <button key={label} role="radio" aria-checked={speed === ms} onClick={() => setSpeed(ms)}>{label}</button>)}
               <span className="keys"><kbd className="key">←</kbd> <kbd className="key">→</kbd> step, <kbd className="key">space</kbd> plays</span>
             </div>
-            {!done && size < 4 && (
+            {!done && (
               <button className="mismatch" onClick={() => onMismatch(states[pos], pos)}>
                 <Icon name="search" size={18} /> My cube doesn't match the screen
               </button>

@@ -141,7 +141,8 @@ export const HOLD2: Record<Face, string> = {
 }
 // Everything a view needs for one cube size: the steps, their phases and target art, how to hold it, and its solved state
 type Phase = { name: string; steps: number[]; tone: string }
-export type Kit = { size: Size; stages: typeof STAGES; phases: Phase[]; art: { pattern: string; view: string }[]; hold: Record<Face, string>; solved: State; stickers: number }
+// per: stickers per face in the state (a 2×2 lives in the 3×3 layout); fixed: the fixed center's index on a face, or -1
+export type Kit = { size: Size; stages: typeof STAGES; phases: Phase[]; art: { pattern: string; view: string }[]; hold: Record<Face, string>; solved: State; stickers: number; per: number; fixed: number }
 // Target art for the reduction steps, drawn on an N×N face, then the 3×3 steps
 const bigArt = (N: number) => {
   const face = (fill: (r: number, c: number) => string) => Array.from({ length: N * N }, (_, i) => fill((i / N) | 0, i % N)).join('')
@@ -154,13 +155,13 @@ const bigArt = (N: number) => {
   ]
 }
 const bigKit = (N: 4 | 5): Kit => ({
-  size: N, stages: STAGES_BIG, solved: bigCube(N).SOLVED, stickers: N === 4 ? 96 : 144, hold: N === 4 ? HOLD2 : HOLD, art: bigArt(N),
+  size: N, stages: STAGES_BIG, solved: bigCube(N).SOLVED, stickers: N === 4 ? 96 : 144, hold: N === 4 ? HOLD2 : HOLD, art: bigArt(N), per: N * N, fixed: N === 5 ? 12 : -1,
   phases: [{ name: 'Centers', steps: [0, 1, 2], tone: 'w' }, { name: 'Edges', steps: [3], tone: 'g' }, { name: 'Solve it like a 3×3', steps: [4, 5, 6, 7, 8, 9, 10, 11], tone: 'y' }],
 })
 export const KIT: Record<Size, Kit> = {
-  3: { size: 3, stages: STAGES, phases: PHASES, art: STEP_ART, hold: HOLD, solved: SOLVED, stickers: 48 },
+  3: { size: 3, stages: STAGES, phases: PHASES, art: STEP_ART, hold: HOLD, solved: SOLVED, stickers: 48, per: 9, fixed: 4 },
   2: {
-    size: 2, stages: STAGES2, solved: SOLVED2, stickers: 24, hold: HOLD2,
+    size: 2, stages: STAGES2, solved: SOLVED2, stickers: 24, hold: HOLD2, per: 9, fixed: -1,
     phases: [{ name: 'First layer', steps: [0], tone: 'w' }, { name: 'Last layer', steps: [1, 2], tone: 'y' }],
     art: [{ pattern: 'wwww', view: 'Bottom' }, { pattern: '????', view: 'Top' }, { pattern: 'yyyy', view: 'Top' }],
   },
@@ -196,9 +197,13 @@ export function Icon({ name, size = 22, className }: { name: keyof typeof ICONS 
 }
 
 const PAD_ROWS: [string, string][] = [['R', 'Right'], ['L', 'Left'], ['U', 'Top'], ['D', 'Bottom'], ['F', 'Front'], ['B', 'Back'], ['y', 'Whole cube']]
+// Big cubes add the second-layer slices, x and z, and on a 5×5 the middle slices
+const BIG_ROWS: [string, string][] = [['r', 'Right inner'], ['l', 'Left inner'], ['u', 'Top inner'], ['d', 'Bottom inner'], ['f', 'Front inner'], ['b', 'Back inner'], ['x', 'Roll cube'], ['z', 'Tip cube']]
+const MID_ROWS: [string, string][] = [['M', 'Middle (L way)'], ['E', 'Middle (D way)'], ['S', 'Middle (F way)']]
 
 // Move keys colored by the face they turn; keyboard works too (letter = clockwise, Shift+letter = counter-clockwise)
-export function MovePad({ state, now, onMove }: { state: State; now?: string; onMove: (m: string) => void }) {
+export function MovePad({ state, now, onMove, size = 3 }: { state: State; now?: string; onMove: (m: string) => void; size?: Size }) {
+  const rows = size > 3 ? [...PAD_ROWS, ...BIG_ROWS, ...(size === 5 ? MID_ROWS : [])] : PAD_ROWS
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || e.key.length !== 1 || document.querySelector('dialog[open]')) return
@@ -209,8 +214,8 @@ export function MovePad({ state, now, onMove }: { state: State; now?: string; on
     return () => removeEventListener('keydown', key)
   })
   return (
-    <div className="pad" role="group" aria-label="Move keys">
-      {PAD_ROWS.map(([f, label]) => (
+    <div className={'pad' + (size > 3 ? ' big' : '')} role="group" aria-label="Move keys">
+      {rows.map(([f, label]) => (
         <div key={f} className="pad-row">
           <span className="pad-label">{label}</span>
           {[f, f + "'", f + '2'].map(m => (

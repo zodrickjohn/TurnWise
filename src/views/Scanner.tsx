@@ -1,17 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
-import { SCHEME, type Face } from '../cube/model.ts'
-import { DEFAULT_REF, average, classify, type RGB } from '../cube/colors.ts'
-import { HOLD, Icon, LABEL, ORDER, colorName } from '../ui.tsx'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { SCHEME, type Face, type Size } from '../cube/model.ts'
+import { average, classify, classifyAll, type RGB } from '../cube/colors.ts'
+import { Icon, KIT, LABEL, ORDER, colorName } from '../ui.tsx'
 
 const GUIDE = 0.62 // guide square as a share of the frame's short side; CSS .scan-guide matches it
 // finish: what the last screen says and its button (defaults to reviewing on the paint screen)
-type Props = { start: Face; onFaces: (faces: Partial<Record<Face, string[]>>, next: Face) => void; onClose: () => void; finish?: [string, string] }
+type Props = { start: Face; onFaces: (faces: Partial<Record<Face, string[]>>, next: Face) => void; onClose: () => void; finish?: [string, string]; size?: Size }
 
-// Camera scanner: live per-sticker detection, calibrated by the center colors of faces already saved
-export default function Scanner({ start, onFaces, onClose, finish }: Props) {
+// Camera scanner for any size: live per-sticker detection, with colors re-learned from every saved face.
+// Odd cubes anchor on their fixed centers; once all six faces are in, no color may take more than N² stickers
+export default function Scanner({ start, onFaces, onClose, finish, size = 3 }: Props) {
+  const n = size, cells = n * n, mid = n % 2 ? ((n - 1) / 2) * (n + 1) : -1 // the fixed center's cell on odd cubes
   const dialog = useRef<HTMLDialogElement>(null)
   const video = useRef<HTMLVideoElement>(null)
-  const saved = useRef<Partial<Record<Face, RGB[]>>>({})
+  const [saved, setSaved] = useState<Partial<Record<Face, RGB[]>>>({})
   // Fixed when the scanner opens; the paint screen's face selection moves while scanning
   const [queue] = useState(() => [...ORDER.slice(ORDER.indexOf(start)), ...ORDER.slice(0, ORDER.indexOf(start))])
   const [k, setK] = useState(0)
@@ -33,7 +35,7 @@ export default function Scanner({ start, onFaces, onClose, finish }: Props) {
         setMirror(s.getVideoTracks()[0].getSettings().facingMode !== 'environment')
       })
       .catch(() => setError("Turnwise can't use your camera. Allow camera access from your browser's address bar, or paint the stickers by hand."))
-    // Sample the 9 guide cells a few times a second from the raw (unmirrored) frame
+    // Sample the N×N guide cells a few times a second from the raw (unmirrored) frame
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d', { willReadFrequently: true })!
     const timer = setInterval(() => {
@@ -41,30 +43,31 @@ export default function Scanner({ start, onFaces, onClose, finish }: Props) {
       if (!v || v.readyState < 2 || !v.videoWidth) return
       const w = (canvas.width = v.videoWidth), h = (canvas.height = v.videoHeight)
       ctx.drawImage(v, 0, 0)
-      const cell = (Math.min(w, h) * GUIDE) / 3, x0 = (w - cell * 3) / 2, y0 = (h - cell * 3) / 2, r = cell * 0.2
-      setLive(Array.from({ length: 9 }, (_, i) => average(ctx.getImageData(x0 + ((i % 3) + 0.5) * cell - r, y0 + (((i / 3) | 0) + 0.5) * cell - r, 2 * r, 2 * r).data)))
+      const cell = (Math.min(w, h) * GUIDE) / n, x0 = (w - cell * n) / 2, y0 = (h - cell * n) / 2, r = cell * 0.2
+      setLive(Array.from({ length: cells }, (_, i) => average(ctx.getImageData(x0 + ((i % n) + 0.5) * cell - r, y0 + (((i / n) | 0) + 0.5) * cell - r, 2 * r, 2 * r).data)))
     }, 220)
     return () => { alive = false; clearInterval(timer); stream?.getTracks().forEach(t => t.stop()) }
   }, [])
 
-  // References: defaults, overridden by saved faces' centers and the live center of the face in view
-  const refsFor = (f: Face, center?: RGB) => {
-    const refs = { ...DEFAULT_REF }
-    for (const [sf, px] of Object.entries(saved.current)) if (sf !== f) refs[SCHEME[sf as Face]] = px![4]
-    if (center) refs[SCHEME[f]] = center
-    return refs
+  // Read every saved face together: shared lighting, fixed centers as anchors, and the N² cap once the cube is complete
+  const readAll = (faces: Partial<Record<Face, RGB[]>>) => {
+    const list = Object.entries(faces) as [Face, RGB[]][]
+    const px = list.flatMap(([, p]) => p), fixed = list.flatMap(([f]) => Array.from({ length: cells }, (_, i) => (i === mid ? SCHEME[f] : null)))
+    const { labels, refs } = classifyAll(px, fixed, list.length === 6 ? cells : Infinity)
+    return { refs, faces: Object.fromEntries(list.map(([f], j) => [f, labels.slice(j * cells, (j + 1) * cells)])) as Partial<Record<Face, string[]>> }
   }
-  // Calibrate on the face's own center only when it really is that face
-  const read = (f: Face, px: RGB[], calibrate = true) => { const refs = refsFor(f, calibrate ? px[4] : undefined); return px.map((p, i) => (i === 4 ? SCHEME[f] : classify(p, refs))) }
-  const seenCenter = live && !done ? classify(live[4], refsFor(face)) : null
+  const learned = useMemo(() => readAll(saved).refs, [saved])
+  const seenCenter = live && !done && mid >= 0 ? classify(live[mid], learned) : null
   const wrongFace = !!seenCenter && seenCenter !== SCHEME[face]
-  const colors = live && !done ? read(face, live, !wrongFace) : null
+  const colors = live && !done ? live.map((p, i) => (i === mid && !wrongFace ? SCHEME[face] : classify(p, learned))) : null
 
+  // The paint screen's layout: N² per face, except a 2×2, which lives in the corners of the 3×3 layout
+  const toState = (c: string[]) => (size === 2 ? Array.from({ length: 9 }, (_, i) => c[[0, -1, 1, -1, -1, -1, 2, -1, 3][i]] ?? '_') : c)
   const saveFace = () => {
     if (!live) return
-    saved.current[face] = live
-    // Re-read every saved face: each new center sharpens the color references
-    onFaces(Object.fromEntries(Object.entries(saved.current).map(([f, px]) => [f, read(f as Face, px!)])), queue[Math.min(k + 1, 5)])
+    const next = { ...saved, [face]: live }
+    setSaved(next)
+    onFaces(Object.fromEntries(Object.entries(readAll(next).faces).map(([f, c]) => [f, toState(c!)])), queue[Math.min(k + 1, 5)])
     setK(k + 1)
   }
 
@@ -90,11 +93,11 @@ export default function Scanner({ start, onFaces, onClose, finish }: Props) {
         </div>
       ) : (
         <>
-          <p className="scan-hold"><span className={'dot c-' + SCHEME[face]} /> {HOLD[face]} Fill the square with the face.</p>
+          <p className="scan-hold">{mid >= 0 && <span className={'dot c-' + SCHEME[face]} />} {KIT[size].hold[face]} Fill the square with the face.</p>
           <div className="scan-view">
             <video ref={video} autoPlay playsInline muted className={mirror ? 'mirror' : ''} />
-            <div className={'scan-guide' + (mirror ? ' mirror' : '')} aria-hidden="true">
-              {Array.from({ length: 9 }, (_, i) => <i key={i}>{colors && <b className={'c-' + colors[i]} />}</i>)}
+            <div className={'scan-guide' + (mirror ? ' mirror' : '')} style={{ '--n': n } as CSSProperties} aria-hidden="true">
+              {Array.from({ length: cells }, (_, i) => <i key={i}>{colors && <b className={'c-' + colors[i]} />}</i>)}
             </div>
             {!live && <p className="scan-wait">Starting camera…</p>}
           </div>

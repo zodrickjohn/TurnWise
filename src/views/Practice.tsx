@@ -1,30 +1,50 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Cube3D } from '../cube/Cube3D.ts'
-import { FACES, SOLVED, cornersOnly, invertMove, move, scramble, toMoves, type Size, type State } from '../cube/model.ts'
-import { STAGES, practiceFrom, practiceSetup, prepare, solve, stageDone, validate } from '../cube/solver.ts'
-import { Confetti, CubeView, Icon, KIT, Mini, MovePad, Tiles, describe, faceColor, load, save } from '../ui.tsx'
+import { FACES, invertMove, move, toMoves, type Size, type State } from '../cube/model.ts'
+import { bigCube } from '../cube/big.ts'
+import type { Chunk } from '../cube/solver.ts'
+import { stageDoneAny, validateAny, type Task } from '../cube/bigsolve.ts'
+import { ask } from '../cube/ask.ts'
+import { Confetti, CubeView, Icon, KIT, Mini, MovePad, Tiles, describe, faceColor, load, save, type Kit } from '../ui.tsx'
 import Scanner from './Scanner.tsx'
 import { Coach } from '../Coach.tsx'
 
 type Mode = 'screen' | 'real'
-const colorsAlong = (s: State, alg: string) => toMoves(alg).reduce<[State, string[]]>(([st, cs], m) => [move(st, m), [...cs, faceColor(st, m)]], [s, []])[1]
+type Deal = { start: State; par: number }
+type Setup = Deal & { setup: string }
+const SIZES: Size[] = [2, 3, 4, 5]
+const turnFor = (size: Size) => (size > 3 ? bigCube(size).move : move)
+const colorsAlong = (size: Size, s: State, alg: string) => toMoves(alg).reduce<[State, string[]]>(([st, cs], m) => [turnFor(size)(st, m), [...cs, faceColor(st, m)]], [s, []])[1]
+const algsOf = (chunks: Chunk[]) => chunks.flatMap(c => c.lines.map(l => l.alg)).join(' ')
 const starsFor = (moves: number, par: number, helped: boolean) => (helped ? 1 : moves <= par ? 3 : moves <= par * 1.6 ? 2 : 1)
+
+// Ask the solver; the answer is undefined while it works (a 5×5 can take a second or two)
+function useAnswer<T>(task: Task | null, deps: unknown[]): [T | undefined, string] {
+  const [got, setGot] = useState<{ v?: T; err: string }>({ err: '' })
+  useEffect(() => {
+    setGot({ err: '' })
+    if (!task) return
+    let live = true
+    ask<T>(task).then(v => live && setGot({ v, err: '' }), e => live && setGot({ err: (e as Error).message }))
+    return () => { live = false }
+  }, deps)
+  return [got.v, got.err]
+}
 
 function Stars({ n }: { n: number }) {
   return <span className="stars" role="img" aria-label={`${n} of 3 stars`}>{[0, 1, 2].map(i => <i key={i} className={i < n ? 'on' : ''} />)}</span>
 }
 
-// Shared shell: header, mode switch and step picker on the left, the mode's cube on the right
-// painted: a complete, valid cube from the paint screen, offered as a starting point for real-cube practice
-// Real-cube practice needs the camera, which reads 3x3s only, so a 2x2 practices on screen
+// Shared shell: header, size and mode switches and the step picker on the left, the mode's cube on the right
+// painted: a complete, valid cube of this size from the paint screen, offered as a starting point for real-cube practice
 export default function Practice({ painted, size, setSize }: { painted?: State; size: Size; setSize: (s: Size) => void }) {
-  const K = KIT[size], last = K.stages.length - 1, tag = size === 3 ? '' : '2' // a 2x2 keeps its own progress
-  const [mode, setMode] = useState<Mode>(() => (size === 3 && load<string>('practiceMode', 'screen') === 'real' ? 'real' : 'screen'))
+  const K = KIT[size], last = K.stages.length - 1, tag = size === 3 ? '' : String(size) // each size keeps its own progress
+  const [mode, setMode] = useState<Mode>(() => (load<string>('practiceMode', 'screen') === 'real' ? 'real' : 'screen'))
   const [step, setStep] = useState(() => Math.min(last, Math.max(0, load('practiceStep' + tag, size === 3 ? 2 : 0))))
   const [round, setRound] = useState(0) // bump to deal a fresh cube
   const [best, setBest] = useState<Record<number, number>>(() => load('practiceBest' + tag, {}))
-  const [real, setReal] = useState<Record<number, boolean>>(() => load('practiceReal', {}))
-  useEffect(() => { if (size === 3) save('practiceMode', mode); save('practiceStep' + tag, step) }, [mode, step])
+  const [real, setReal] = useState<Record<number, boolean>>(() => load('practiceReal' + tag, {}))
+  useEffect(() => { save('practiceMode', mode); save('practiceStep' + tag, step) }, [mode, step])
 
   const choose = (k: number) => { setStep(k); setRound(r => r + 1) }
   const again = () => setRound(r => r + 1)
@@ -33,19 +53,17 @@ export default function Practice({ painted, size, setSize }: { painted?: State; 
     <>
       <header className="page-head">
         <h1>Practice</h1>
-        <p className="lede">Pick a step and drill it until it feels automatic. {size === 3 ? 'Use the cube on screen, or set up your own cube with a few moves and solve it in your hands.' : 'Turn the 2×2 on screen and try to match the guide\'s move count.'}</p>
+        <p className="lede">Pick a step and drill it until it feels automatic. Use the cube on screen, or set up your own cube with a few moves and solve it in your hands.</p>
       </header>
       <div className="practice-switches">
         <div className="mode-switch" role="radiogroup" aria-label="Cube size">
-          {([3, 2] as const).map(n => <button key={n} role="radio" aria-checked={size === n} onClick={() => setSize(n)}>{n}×{n}</button>)}
+          {SIZES.map(n => <button key={n} role="radio" aria-checked={size === n} onClick={() => setSize(n)}>{n}×{n}</button>)}
         </div>
-        {size === 3 && (
-          <div className="mode-switch" role="radiogroup" aria-label="Where to practice">
-            {([['screen', 'On screen'], ['real', 'On my real cube']] as const).map(([m, label]) => (
-              <button key={m} role="radio" aria-checked={mode === m} onClick={() => { setMode(m); again() }}>{label}</button>
-            ))}
-          </div>
-        )}
+        <div className="mode-switch" role="radiogroup" aria-label="Where to practice">
+          {([['screen', 'On screen'], ['real', 'On my real cube']] as const).map(([m, label]) => (
+            <button key={m} role="radio" aria-checked={mode === m} onClick={() => { setMode(m); again() }}>{label}</button>
+          ))}
+        </div>
       </div>
       <ol className="practice-steps" aria-label="Choose a step">
         {K.stages.map((s, k) => (
@@ -63,46 +81,53 @@ export default function Practice({ painted, size, setSize }: { painted?: State; 
       </ol>
     </>
   )
-  const props = { step, top, again, next, size, stages: K.stages }
+  const props = { step, top, again, next, size, K }
   const key = `${mode}-${step}-${round}`
   return mode === 'screen'
     ? <OnScreen key={key} {...props} onStars={n => setBest(b => { const nb = { ...b, [step]: Math.max(b[step] ?? 0, n) }; save('practiceBest' + tag, nb); return nb })} />
-    : <RealCube key={key} {...props} painted={painted} onVerified={() => setReal(r => { const nr = { ...r, [step]: true }; save('practiceReal', nr); return nr })} />
+    : <RealCube key={key} {...props} painted={painted} onVerified={() => setReal(r => { const nr = { ...r, [step]: true }; save('practiceReal' + tag, nr); return nr })} />
 }
 
-type ModeProps = { step: number; top: ReactNode; again: () => void; next?: () => void; size: Size; stages: typeof STAGES }
+type ModeProps = { step: number; top: ReactNode; again: () => void; next?: () => void; size: Size; K: Kit }
 
-// A real cube at the start of step k: scramble, run the guide up to step k, use its move count as par
-function screenChallenge(step: number, size: Size) {
-  for (;;) {
-    const scrambled = move(SOLVED, scramble())
-    const { start: s0, plan } = prepare(size === 3 ? scrambled : cornersOnly(scrambled), size)
-    const algs = (k: number) => plan[k].flatMap(ch => ch.lines.map(l => l.alg)).join(' ')
-    const start = plan.slice(0, step).reduce((s, _, k) => move(s, algs(k)), s0)
-    const par = toMoves(algs(step)).length
-    if (par) return { start, par }
-  }
+// While the solver deals a cube: the shell stays, the panel says what's happening
+function Dealing({ top, step, K, size, error, again }: ModeProps & { error: string }) {
+  return (
+    <div className="split practice">
+      <article className="lesson">
+        {top}
+        <section className="panel challenge" aria-live="polite">
+          <ChallengeHead step={step} info={K.stages[step]} />
+          {error ? <><p className="error" role="alert">{error}</p><button className="btn yellow" onClick={again}>Try again</button></> : <p className="note">Dealing a {size}×{size} for this step…</p>}
+        </section>
+      </article>
+      <aside className="stage"><div className="stage-card"><CubeView cubeRef={{ current: null }} initial={K.solved} size={size} /></div></aside>
+    </div>
+  )
 }
 
-function Hints({ look, from, chunks }: { look: string; from: State; chunks: ReturnType<typeof solve>[number] | null }) {
+// chunks: undefined while the guide is working them out, null when an earlier step came undone
+function Hints({ look, from, chunks, size, onNeed }: { look: string; from: State; chunks: Chunk[] | null | undefined; size: Size; onNeed: () => void }) {
   const [level, setLevel] = useState(0) // 1 what to look for, 2 which piece, 3+ reveal the guide's moves part by part
-  const next = chunks?.[0]
+  const nextChunk = chunks?.[0]
   const lines = chunks?.flatMap(ch => ch.lines) ?? []
   const shown = Math.max(0, level - 2)
-  const starts = lines.reduce<State[]>((acc, l) => [...acc, move(acc.at(-1)!, l.alg)], [from])
+  const starts = lines.reduce<State[]>((acc, l) => [...acc, turnFor(size)(acc.at(-1)!, l.alg)], [from])
+  const more = () => { setLevel(level + 1); if (level >= 1) onNeed() }
   return (
     <section className="panel hints">
       <div className="pad-head">
         <h2><Icon name="bulb" size={22} /> Hints</h2>
-        {(level < 2 || shown < lines.length) && <button className="btn small" onClick={() => setLevel(level + 1)}>{level === 0 ? 'Show a hint' : level < 2 ? 'Another hint' : 'Reveal the next moves'}</button>}
+        {(level < 2 || chunks === undefined || shown < lines.length) && <button className="btn small" onClick={more}>{level === 0 ? 'Show a hint' : level < 2 ? 'Another hint' : 'Reveal the next moves'}</button>}
       </div>
-      {!chunks && <p className="bad">An earlier step came undone. Undo your last few moves, or start over.</p>}
-      {level === 0 && chunks && <p className="note">Each hint is more specific than the last. Try to get there with as few as you can.</p>}
+      {chunks === null && <p className="bad">An earlier step came undone. Undo your last few moves, or start over.</p>}
+      {level === 0 && chunks !== null && <p className="note">Each hint is more specific than the last. Try to get there with as few as you can.</p>}
       {level >= 1 && <p><b>What to look for:</b> {look}</p>}
-      {level >= 2 && next && <p><b>Work on:</b> {next.title.replace(/^./, c => c.toLowerCase())}.</p>}
+      {level >= 2 && chunks === undefined && <p className="note">Working out the next moves…</p>}
+      {level >= 2 && nextChunk && <p><b>Work on:</b> {nextChunk.title.replace(/^./, c => c.toLowerCase())}.</p>}
       {lines.slice(0, shown).map((l, i) => (
         <div key={i} className="hint-moves">
-          <Tiles alg={l.alg} colors={colorsAlong(starts[i], l.alg)} />
+          <Tiles alg={l.alg} colors={colorsAlong(size, starts[i], l.alg)} />
           <p>{l.note}</p>
         </div>
       ))}
@@ -110,27 +135,36 @@ function Hints({ look, from, chunks }: { look: string; from: State; chunks: Retu
   )
 }
 
-function OnScreen({ step, top, again, next, size, stages, onStars }: ModeProps & { onStars: (n: number) => void }) {
+function OnScreen(props: ModeProps & { onStars: (n: number) => void }) {
+  const [ch, err] = useAnswer<Deal>({ kind: 'challenge', step: props.step, size: props.size }, [])
+  return ch ? <OnScreenGame {...props} ch={ch} /> : <Dealing {...props} error={err} />
+}
+
+function OnScreenGame({ step, top, again, next, size, K, onStars, ch }: ModeProps & { onStars: (n: number) => void; ch: Deal }) {
   const cube = useRef<Cube3D>(null)
-  const [ch] = useState(() => screenChallenge(step, size))
+  const turnState = turnFor(size)
   const [seq, setSeq] = useState<string[]>([])
   const [helped, setHelped] = useState(false)
-  const cur = useMemo(() => move(ch.start, seq.join(' ')), [seq])
-  const done = seq.length > 0 && stageDone(step, cur, size)
+  const [need, setNeed] = useState(size <= 3) // big cubes only ask the guide when a hint needs it
+  const [wantShow, setWantShow] = useState(false)
+  const cur = useMemo(() => turnState(ch.start, seq.join(' ')), [seq])
+  const done = seq.length > 0 && stageDoneAny(step, cur, size)
   const stars = starsFor(seq.length, ch.par, helped)
-  const chunks = useMemo(() => { if (done) return null; const plan = solve(cur, size); return plan.some((p, k) => k < step && p.length) ? null : plan[step] }, [cur, done])
+  const [chunks] = useAnswer<Chunk[] | null>(done || !need ? null : { kind: 'chunks', cube: cur, step, size }, [cur, need, done])
   useEffect(() => { if (done) { cube.current?.spin(); onStars(stars) } }, [done])
 
   const turn = (m: string) => { if (done) return; setSeq(s => [...s, m]); cube.current?.play(m, 380) }
   const undo = () => { const m = seq.at(-1); if (!m || done) return; setSeq(s => s.slice(0, -1)); cube.current?.play(invertMove(m), 300) }
   const reset = () => { setSeq([]); setHelped(false); cube.current?.setState(ch.start) }
-  const showMe = () => {
-    const l = chunks?.[0]?.lines[0]
+  const play = (c: Chunk[]) => {
+    const l = c[0]?.lines[0]
     if (!l) return
     setHelped(true)
     setSeq(s => [...s, ...toMoves(l.alg)])
     toMoves(l.alg).forEach(m => cube.current?.play(m, 480))
   }
+  const showMe = () => (chunks ? play(chunks) : (setNeed(true), setWantShow(true)))
+  useEffect(() => { if (wantShow && chunks) { setWantShow(false); play(chunks) } }, [chunks, wantShow])
   const last = seq.at(-1)
   return (
     <div className="split practice">
@@ -138,37 +172,37 @@ function OnScreen({ step, top, again, next, size, stages, onStars }: ModeProps &
         {top}
         <section className={'panel challenge' + (done ? ' won' : '')} aria-live="polite">
           {done && <Confetti />}
-          <ChallengeHead step={step} info={stages[step]} />
+          <ChallengeHead step={step} info={K.stages[step]} />
           <div className="score">
             <span className="chip">Your moves <b>{seq.length}</b></span>
             <span className="chip">Par <b>{ch.par}</b></span>
             {helped && <span className="chip muted">Used "show me"</span>}
           </div>
           {done ? (
-            <Win again={again} next={next} nextTitle={stages[step + 1]?.title}>
+            <Win again={again} next={next} nextTitle={K.stages[step + 1]?.title}>
               <Stars n={stars} />
               <p>{helped ? 'Done with a little help. Try a fresh one without "show me".' : seq.length <= ch.par ? `${seq.length} moves, at or under par. That's the guide's own count.` : `${seq.length} moves against a par of ${ch.par}. Try another and aim lower.`}</p>
             </Win>
           ) : (
             <>
-              <MovePad state={cur} now={last} onMove={turn} />
+              <MovePad state={cur} now={last} onMove={turn} size={size} />
               <div className="actions">
                 <button className="btn white" onClick={undo} disabled={!seq.length}><Icon name="undo" size={18} /> Undo</button>
                 <button className="btn ghost" onClick={reset} disabled={!seq.length}><Icon name="reset" size={18} /> Start over</button>
                 <button className="btn ghost" onClick={again}>New cube</button>
-                {chunks?.[0] && <button className="btn ghost" onClick={showMe}><Icon name="play" size={16} /> Show me the next moves</button>}
+                {chunks !== null && <button className="btn ghost" onClick={showMe} disabled={wantShow}><Icon name="play" size={16} /> {wantShow ? 'Working it out…' : 'Show me the next moves'}</button>}
               </div>
             </>
           )}
         </section>
-        {!done && <Hints look={stages[step].look} from={cur} chunks={chunks} key={seq.length ? 'live' : 'fresh'} />}
+        {!done && <Hints look={K.stages[step].look} from={cur} chunks={need ? chunks : undefined} size={size} onNeed={() => setNeed(true)} key={seq.length ? 'live' : 'fresh'} />}
       </article>
       <aside className="stage">
         <div className="stage-card">
           <CubeView cubeRef={cube} initial={ch.start} size={size} />
           <Coach className="stage-coach" mood={done ? 'cheer' : last ? 'happy' : 'grit'} sayKey={done ? 'won' : seq.length}
             say={done ? (stars === 3 ? 'Three stars! Right on the guide\'s count.' : 'Step done! Want to try for fewer moves?')
-              : last ? <span className="say-move"><Tiles alg={last} colors={[faceColor(move(ch.start, seq.slice(0, -1).join(' ')), last)]} at={0} size="lg" />{describe(last)}</span>
+              : last ? <span className="say-move"><Tiles alg={last} colors={[faceColor(turnState(ch.start, seq.slice(0, -1).join(' ')), last)]} at={0} size="lg" />{describe(last)}</span>
               : `Your cube for step ${step + 1}. Par is ${ch.par}. You've got this!`} />
         </div>
       </aside>
@@ -176,33 +210,40 @@ function OnScreen({ step, top, again, next, size, stages, onStars }: ModeProps &
   )
 }
 
+function RealCube(props: ModeProps & { painted?: State; onVerified: () => void }) {
+  const [deal, err] = useAnswer<Setup>({ kind: 'setup', step: props.step, size: props.size }, [])
+  return deal ? <RealCubeGame {...props} deal={deal} /> : <Dealing {...props} error={err} />
+}
+
 // Real cube: follow short setup moves from a solved cube, solve the step in your hands, optionally check with the camera
-function RealCube({ step, top, again, next, stages, painted, onVerified }: ModeProps & { painted?: State; onVerified: () => void }) {
+function RealCubeGame({ step, top, again, next, size, K, painted, onVerified, deal }: ModeProps & { painted?: State; onVerified: () => void; deal: Setup }) {
   const cube = useRef<Cube3D>(null)
   const busy = useRef(false)
-  const [ch, setCh] = useState(() => ({ ...practiceSetup(step), from: SOLVED, scrambled: false }))
+  const [ch, setCh] = useState({ ...deal, from: K.solved, scrambled: false })
   const setup = useMemo(() => toMoves(ch.setup), [ch])
-  const setupColors = useMemo(() => colorsAlong(ch.from, ch.setup), [ch])
-  const chunks = useMemo(() => solve(ch.start)[step], [ch])
+  const setupColors = useMemo(() => colorsAlong(size, ch.from, ch.setup), [ch])
+  const [chunks] = useAnswer<Chunk[] | null>({ kind: 'chunks', cube: ch.start, step, size }, [ch])
   const [i, setI] = useState(0)
   const [phase, setPhase] = useState<'setup' | 'solve' | 'won'>('setup')
   const [verified, setVerified] = useState(false)
   const [verdict, setVerdict] = useState('')
   const [scanning, setScanning] = useState<'check' | 'source' | null>(null)
   const [reveal, setReveal] = useState(false)
-  const scanned = useRef<State>(SOLVED)
-  const scan = (why: 'check' | 'source') => { scanned.current = SOLVED.map((c, k) => (k % 9 === 4 ? c : '_')); setVerdict(''); setScanning(why) }
+  const scanned = useRef<State>(K.solved)
+  const scan = (why: 'check' | 'source') => { scanned.current = K.solved.map((c, k) => (k % K.per === K.fixed ? c : '_')); setVerdict(''); setScanning(why) }
 
   // Start from the learner's scrambled cube: the guide's earlier steps become the setup
   const startFromScrambled = (cubeNow: State) => {
-    const problem = validate(cubeNow)
+    const problem = validateAny(cubeNow, size)
     if (problem) return setVerdict(problem)
-    const r = practiceFrom(cubeNow, step)
-    if (!r.par) return setVerdict(`Your cube already has step ${step + 1} done. Pick a later step, or scramble it first.`)
-    setCh({ ...r, from: cubeNow, scrambled: true })
-    setI(0)
-    setVerdict('')
-    cube.current?.setState(cubeNow)
+    setVerdict('Planning the moves to this step…')
+    ask<Setup>({ kind: 'from', cube: cubeNow, step, size }).then(r => {
+      if (!r.par) return setVerdict(`Your cube already has step ${step + 1} done. Pick a later step, or scramble it first.`)
+      setCh({ ...r, from: cubeNow, scrambled: true })
+      setI(0)
+      setVerdict('')
+      cube.current?.setState(cubeNow)
+    }, e => setVerdict((e as Error).message))
   }
 
   const stepSetup = async (dir: 1 | -1, all = false) => {
@@ -229,26 +270,27 @@ function RealCube({ step, top, again, next, stages, painted, onVerified }: ModeP
     const why = scanning
     setScanning(null)
     const s = scanned.current
-    if (s.includes('_')) return setVerdict(`Scan all six faces to ${why === 'source' ? 'use your cube' : 'check your cube'}.`)
+    if (s.some((c, k) => c === '_' && (size !== 2 || [0, 2, 6, 8].includes(k % 9)))) return setVerdict(`Scan all six faces to ${why === 'source' ? 'use your cube' : 'check your cube'}.`)
     if (why === 'source') return startFromScrambled(s)
-    const problem = validate(s)
+    const problem = validateAny(s, size)
     if (problem) return setVerdict(problem)
-    if (stageDone(step, s)) { setVerified(true); setPhase('won'); onVerified(); return }
-    setVerdict(step > 0 && !stageDone(step - 1, s) ? `An earlier step came undone (step ${step}). Fix that first, then finish this one.` : `Not quite yet. The goal: ${STAGES[step].goal}`)
+    if (stageDoneAny(step, s, size)) { setVerified(true); setPhase('won'); onVerified(); return }
+    setVerdict(step > 0 && !stageDoneAny(step - 1, s, size) ? `An earlier step came undone (step ${step}). Fix that first, then finish this one.` : `Not quite yet. The goal: ${K.stages[step].goal}`)
   }
 
   const setupDone = i >= setup.length
+  const guideMoves = chunks ? toMoves(algsOf(chunks)).length : ch.par
   return (
     <div className="split practice">
       <article className="lesson">
         {top}
         <section className={'panel challenge' + (phase === 'won' ? ' won' : '')} aria-live="polite">
           {phase === 'won' && <Confetti />}
-          <ChallengeHead step={step} info={stages[step]} />
+          <ChallengeHead step={step} info={K.stages[step]} />
           {phase === 'setup' && (
             <div className="setup">
               {ch.scrambled
-                ? <p><b>From your scrambled cube</b>, yellow on top and green facing you, do these {setup.length} moves: the guide's steps 1 to {step}. A quick review on the way.</p>
+                ? <p><b>From your scrambled cube</b>, held the way you scanned it, do these {setup.length} moves: the guide's steps 1 to {step}. A quick review on the way.</p>
                 : <p><b>Start with a solved cube</b>, yellow on top and green facing you. Do these {setup.length} moves, one at a time:</p>}
               <SetupTiles moves={setup} colors={setupColors} at={i} />
               <div className="actions">
@@ -272,7 +314,7 @@ function RealCube({ step, top, again, next, stages, painted, onVerified }: ModeP
           )}
           {phase === 'solve' && (
             <div className="setup">
-              <p>Now solve <b>step {step + 1}</b> on your cube. The guide does it in <b>{toMoves(chunks.flatMap(c => c.lines.map(l => l.alg)).join(' ')).length} moves</b> from here. Hints are below if you get stuck.</p>
+              <p>Now solve <b>step {step + 1}</b> on your cube. The guide does it in <b>{guideMoves} moves</b> from here. Hints are below if you get stuck.</p>
               {verdict && <p className="error" role="alert">{verdict}</p>}
               <div className="actions">
                 <button className="btn yellow" onClick={() => scan('check')}><Icon name="camera" size={18} /> Check it with the camera</button>
@@ -281,27 +323,27 @@ function RealCube({ step, top, again, next, stages, painted, onVerified }: ModeP
             </div>
           )}
           {phase === 'won' && (
-            <Win again={again} next={next} nextTitle={stages[step + 1]?.title} label="Set up another">
+            <Win again={again} next={next} nextTitle={K.stages[step + 1]?.title} label="Set up another">
               <p>{verified ? `Checked with the camera: step ${step + 1} is done on your real cube.` : `Nice work. The guide's way took ${ch.par} moves from that position.`}</p>
               <button className="btn ghost" onClick={() => setReveal(!reveal)}>{reveal ? "Hide the guide's moves" : "Compare with the guide's moves"}</button>
-              {reveal && chunks.flatMap(c => c.lines).map((l, k, all) => (
+              {reveal && chunks?.flatMap(c => c.lines).map((l, k, all) => (
                 <div key={k} className="hint-moves">
-                  <Tiles alg={l.alg} colors={colorsAlong(all.slice(0, k).reduce((s, x) => move(s, x.alg), ch.start), l.alg)} />
+                  <Tiles alg={l.alg} colors={colorsAlong(size, all.slice(0, k).reduce((s, x) => turnFor(size)(s, x.alg), ch.start), l.alg)} />
                   <p>{l.note}</p>
                 </div>
               ))}
             </Win>
           )}
         </section>
-        {phase === 'solve' && <Hints look={STAGES[step].look} from={ch.start} chunks={chunks} />}
+        {phase === 'solve' && <Hints look={K.stages[step].look} from={ch.start} chunks={chunks} size={size} onNeed={() => {}} />}
         {scanning && (
-          <Scanner start="F" onClose={check} finish={scanning === 'source' ? ['All six faces are in. Turnwise will plan the moves to the start of this step.', 'Use my cube'] : ['All six faces are in. Close this to see whether the step is done.', 'Check my step']}
-            onFaces={faces => { scanned.current = scanned.current.map((c, k) => faces[FACES[(k / 9) | 0]]?.[k % 9] ?? c) }} />
+          <Scanner start="F" size={size} onClose={check} finish={scanning === 'source' ? ['All six faces are in. Turnwise will plan the moves to the start of this step.', 'Use my cube'] : ['All six faces are in. Close this to see whether the step is done.', 'Check my step']}
+            onFaces={faces => { scanned.current = scanned.current.map((c, k) => (k % K.per === K.fixed ? c : faces[FACES[(k / K.per) | 0]]?.[k % K.per] ?? c)) }} />
         )}
       </article>
       <aside className="stage">
         <div className="stage-card">
-          <CubeView cubeRef={cube} initial={ch.from} />
+          <CubeView cubeRef={cube} initial={ch.from} size={size} />
           <Coach className="stage-coach" mood={phase === 'won' ? 'cheer' : phase === 'solve' ? 'think' : verdict ? 'oops' : 'happy'} sayKey={`${phase}-${i}-${verdict}`}
             say={phase === 'setup' && !setupDone && setup.length
               ? <span className="say-move"><Tiles alg={setup[i]} colors={[setupColors[i]]} at={0} size="lg" />{describe(setup[i])}</span>
