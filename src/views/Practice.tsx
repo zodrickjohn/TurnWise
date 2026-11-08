@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Cube3D } from '../cube/Cube3D.ts'
 import { FACES, SOLVED, invertMove, move, scramble, toMoves, type State } from '../cube/model.ts'
-import { STAGES, practiceSetup, solve, stageDone, timeline, validate } from '../cube/solver.ts'
+import { STAGES, practiceFrom, practiceSetup, solve, stageDone, validate } from '../cube/solver.ts'
 import { Confetti, CubeView, Icon, Mini, MovePad, STEP_ART, Tiles, describe, faceColor, load, save } from '../ui.tsx'
 import Scanner from './Scanner.tsx'
 
@@ -14,7 +14,8 @@ function Stars({ n }: { n: number }) {
 }
 
 // Shared shell: header, mode switch and step picker on the left, the mode's cube on the right
-export default function Practice() {
+// painted: a complete, valid cube from the paint screen, offered as a starting point for real-cube practice
+export default function Practice({ painted }: { painted?: State }) {
   const [mode, setMode] = useState<Mode>(() => (load<string>('practiceMode', 'screen') === 'real' ? 'real' : 'screen'))
   const [step, setStep] = useState(() => Math.min(7, Math.max(0, load('practiceStep', 2))))
   const [round, setRound] = useState(0) // bump to deal a fresh cube
@@ -56,7 +57,7 @@ export default function Practice() {
   const key = `${mode}-${step}-${round}`
   return mode === 'screen'
     ? <OnScreen key={key} {...props} onStars={n => setBest(b => { const nb = { ...b, [step]: Math.max(b[step] ?? 0, n) }; save('practiceBest', nb); return nb })} />
-    : <RealCube key={key} {...props} onVerified={() => setReal(r => { const nr = { ...r, [step]: true }; save('practiceReal', nr); return nr })} />
+    : <RealCube key={key} {...props} painted={painted} onVerified={() => setReal(r => { const nr = { ...r, [step]: true }; save('practiceReal', nr); return nr })} />
 }
 
 type ModeProps = { step: number; top: ReactNode; again: () => void; next?: () => void }
@@ -166,20 +167,33 @@ function OnScreen({ step, top, again, next, onStars }: ModeProps & { onStars: (n
 }
 
 // Real cube: follow short setup moves from a solved cube, solve the step in your hands, optionally check with the camera
-function RealCube({ step, top, again, next, onVerified }: ModeProps & { onVerified: () => void }) {
+function RealCube({ step, top, again, next, painted, onVerified }: ModeProps & { painted?: State; onVerified: () => void }) {
   const cube = useRef<Cube3D>(null)
   const busy = useRef(false)
-  const [ch] = useState(() => practiceSetup(step))
-  const setup = useMemo(() => toMoves(ch.setup), [])
-  const setupColors = useMemo(() => colorsAlong(SOLVED, ch.setup), [])
-  const chunks = useMemo(() => solve(ch.start)[step], [])
+  const [ch, setCh] = useState(() => ({ ...practiceSetup(step), from: SOLVED, scrambled: false }))
+  const setup = useMemo(() => toMoves(ch.setup), [ch])
+  const setupColors = useMemo(() => colorsAlong(ch.from, ch.setup), [ch])
+  const chunks = useMemo(() => solve(ch.start)[step], [ch])
   const [i, setI] = useState(0)
   const [phase, setPhase] = useState<'setup' | 'solve' | 'won'>('setup')
   const [verified, setVerified] = useState(false)
   const [verdict, setVerdict] = useState('')
-  const [scanning, setScanning] = useState(false)
+  const [scanning, setScanning] = useState<'check' | 'source' | null>(null)
   const [reveal, setReveal] = useState(false)
-  const scanned = useRef<State>(SOLVED.map((c, k) => (k % 9 === 4 ? c : '_')))
+  const scanned = useRef<State>(SOLVED)
+  const scan = (why: 'check' | 'source') => { scanned.current = SOLVED.map((c, k) => (k % 9 === 4 ? c : '_')); setVerdict(''); setScanning(why) }
+
+  // Start from the learner's scrambled cube: the guide's earlier steps become the setup
+  const startFromScrambled = (cubeNow: State) => {
+    const problem = validate(cubeNow)
+    if (problem) return setVerdict(problem)
+    const r = practiceFrom(cubeNow, step)
+    if (!r.par) return setVerdict(`Your cube already has step ${step + 1} done. Pick a later step, or scramble it first.`)
+    setCh({ ...r, from: cubeNow, scrambled: true })
+    setI(0)
+    setVerdict('')
+    cube.current?.setState(cubeNow)
+  }
 
   const stepSetup = async (dir: 1 | -1, all = false) => {
     if (busy.current || phase !== 'setup') return
@@ -202,9 +216,11 @@ function RealCube({ step, top, again, next, onVerified }: ModeProps & { onVerifi
 
   // Camera check: the scanned cube must have this step done and every earlier one intact
   const check = () => {
-    setScanning(false)
+    const why = scanning
+    setScanning(null)
     const s = scanned.current
-    if (s.includes('_')) return setVerdict('Scan all six faces to check your cube.')
+    if (s.includes('_')) return setVerdict(`Scan all six faces to ${why === 'source' ? 'use your cube' : 'check your cube'}.`)
+    if (why === 'source') return startFromScrambled(s)
     const problem = validate(s)
     if (problem) return setVerdict(problem)
     if (stageDone(step, s)) { setVerified(true); setPhase('won'); onVerified(); return }
@@ -221,8 +237,10 @@ function RealCube({ step, top, again, next, onVerified }: ModeProps & { onVerifi
           <ChallengeHead step={step} />
           {phase === 'setup' && (
             <div className="setup">
-              <p><b>Start with a solved cube</b>, yellow on top and green facing you. Do these {setup.length} moves, one at a time:</p>
-              <Tiles alg={ch.setup} colors={setupColors} at={setupDone ? -1 : i} done={i} />
+              {ch.scrambled
+                ? <p><b>From your scrambled cube</b>, yellow on top and green facing you, do these {setup.length} moves: the guide's steps 1 to {step}. A quick review on the way.</p>
+                : <p><b>Start with a solved cube</b>, yellow on top and green facing you. Do these {setup.length} moves, one at a time:</p>}
+              <SetupTiles moves={setup} colors={setupColors} at={i} />
               <div className="actions">
                 <button className="btn white icon" onClick={() => stepSetup(-1)} disabled={i === 0} aria-label="Previous setup move (left arrow)"><Icon name="prev" /></button>
                 {setupDone
@@ -230,7 +248,16 @@ function RealCube({ step, top, again, next, onVerified }: ModeProps & { onVerifi
                   : <button className="btn yellow" onClick={() => stepSetup(1)}><Icon name="next" size={18} /> Next move ({i + 1} of {setup.length})</button>}
                 {!setupDone && <button className="btn ghost" onClick={() => stepSetup(1, true)}>Play the rest</button>}
               </div>
-              <p className="note">No solved cube to hand? Solve one with the guide first, or practice on screen.</p>
+              {verdict && <p className="error" role="alert">{verdict}</p>}
+              {!ch.scrambled && (
+                <div className="alt-source">
+                  <p><b>Cube scrambled?</b> Use it as it is. Turnwise walks you through the earlier steps first, then hands step {step + 1} to you.</p>
+                  <div className="row">
+                    <button className="btn white small" onClick={() => scan('source')}><Icon name="camera" size={16} /> Scan my scrambled cube</button>
+                    {painted && <button className="btn ghost small" onClick={() => startFromScrambled(painted)}>Use the cube from the paint screen</button>}
+                  </div>
+                </div>
+              )}
             </div>
           )}
           {phase === 'solve' && (
@@ -238,7 +265,7 @@ function RealCube({ step, top, again, next, onVerified }: ModeProps & { onVerifi
               <p>Now solve <b>step {step + 1}</b> on your cube. The guide does it in <b>{toMoves(chunks.flatMap(c => c.lines.map(l => l.alg)).join(' ')).length} moves</b> from here. Hints are below if you get stuck.</p>
               {verdict && <p className="error" role="alert">{verdict}</p>}
               <div className="actions">
-                <button className="btn yellow" onClick={() => { setVerdict(''); setScanning(true) }}><Icon name="camera" size={18} /> Check it with the camera</button>
+                <button className="btn yellow" onClick={() => scan('check')}><Icon name="camera" size={18} /> Check it with the camera</button>
                 <button className="btn white" onClick={() => setPhase('won')}>I've finished</button>
               </div>
             </div>
@@ -258,15 +285,15 @@ function RealCube({ step, top, again, next, onVerified }: ModeProps & { onVerifi
         </section>
         {phase === 'solve' && <Hints step={step} from={ch.start} chunks={chunks} />}
         {scanning && (
-          <Scanner start="F" onClose={check} finish={['All six faces are in. Close this to see whether the step is done.', 'Check my step']}
+          <Scanner start="F" onClose={check} finish={scanning === 'source' ? ['All six faces are in. Turnwise will plan the moves to the start of this step.', 'Use my cube'] : ['All six faces are in. Close this to see whether the step is done.', 'Check my step']}
             onFaces={faces => { scanned.current = scanned.current.map((c, k) => faces[FACES[(k / 9) | 0]]?.[k % 9] ?? c) }} />
         )}
       </article>
       <aside className="stage">
         <div className="stage-card">
-          <CubeView cubeRef={cube} initial={SOLVED} />
+          <CubeView cubeRef={cube} initial={ch.from} />
           <div className="say" aria-live="polite">
-            {phase === 'setup' && !setupDone
+            {phase === 'setup' && !setupDone && setup.length
               ? <><Tiles alg={setup[i]} colors={[setupColors[i]]} at={0} size="xl" key={i} /><p>{describe(setup[i])}</p></>
               : phase === 'setup' ? <p>Your cube should now look like this. Drag to compare every side.</p>
               : phase === 'solve' ? <p>Your starting position for step {step + 1}. Drag to look around.</p>
@@ -274,6 +301,19 @@ function RealCube({ step, top, again, next, onVerified }: ModeProps & { onVerifi
           </div>
         </div>
       </aside>
+    </div>
+  )
+}
+
+// Long setups show a sliding window around the current move instead of a wall of tiles
+function SetupTiles({ moves, colors, at }: { moves: string[]; colors: string[]; at: number }) {
+  const from = Math.max(0, Math.min(at - 4, moves.length - 24))
+  const shown = moves.slice(from, from + 24)
+  return (
+    <div className="setup-tiles">
+      {from > 0 && <span className="more">{from} done</span>}
+      <Tiles alg={shown.join(' ')} colors={colors.slice(from, from + 24)} at={at < moves.length ? at - from : -1} done={at - from} />
+      {from + 24 < moves.length && <span className="more">+{moves.length - from - 24} more</span>}
     </div>
   )
 }

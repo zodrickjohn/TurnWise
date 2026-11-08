@@ -430,3 +430,7 @@ button.big-st:active { transform: scale(0.88); }
 .setup { display: grid; gap: 14px; }
 .setup .tiles { gap: 7px; }
 .setup .tile { font-size: 1rem; }
+.setup-tiles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.more { font-size: 0.85rem; font-weight: 700; color: var(--ink-2); padding: 4px 10px; border: 2px dashed color-mix(in srgb, var(--ink) 35%, transparent); border-radius: 999px; }
+.alt-source { display: grid; gap: 10px; padding: 14px; border: 2.5px dashed color-mix(in srgb, var(--ink) 35%, transparent); border-radius: 14px; }
+.alt-source .row { display: flex; flex-wrap: wrap; gap: 10px; }

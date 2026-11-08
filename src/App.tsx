@@ -112,7 +112,7 @@ export default function App() {
             practice={() => go('practice')}
             onMismatch={(expected, pos) => go('input', () => { setPaint(normalize(expected)); setRepair(pos) })} />
         )}
-        {view === 'practice' && <Practice />}
+        {view === 'practice' && <Practice painted={paint.includes('_') || validate(paint) ? undefined : paint} />}
       </main>
     </>
   )
