@@ -156,29 +156,55 @@ export function Confetti() {
   )
 }
 
-// Theme switch: the screen breaks into cube stickers that flip in as a scrambled mosaic from (x, y),
-// the theme swaps underneath, then the stickers fall away revealing it
-export function stickerWave(x: number, y: number, bg: string, swap: () => void) {
+// Theme switch: a black "cube plastic" iris opens from the toggle at (x, y) with a scrambled cube face inside.
+// Three layer turns solve it to one color (yellow = day, blue = night), the theme swaps underneath,
+// and the whole thing shrinks back into the toggle
+let turning = false
+export async function themeTurn(x: number, y: number, solved: string, swap: () => void) {
+  if (turning) return
   if (reduceMotion || !document.body.animate) return swap()
-  const size = Math.max(64, Math.min(innerWidth, innerHeight) / 9)
-  const cols = Math.ceil(innerWidth / size), rows = Math.ceil(innerHeight / size)
-  const far = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))
-  const layer = document.createElement('div')
-  layer.className = 'wave'
-  layer.style.gridTemplateColumns = `repeat(${cols}, ${size}px)`
-  const tiles = Array.from({ length: cols * rows }, (_, i) => {
-    const t = layer.appendChild(document.createElement('i'))
-    const d = Math.hypot((i % cols) * size + size / 2 - x, Math.floor(i / cols) * size + size / 2 - y) / far
-    return { t, d, c: ['#ffd60a', '#f0302a', '#ff8a00', '#00c46a', '#2f6bff', '#ffffff'][(Math.random() * 6) | 0] }
-  })
-  document.body.appendChild(layer)
-  const cover = tiles.map(({ t, d, c }) => t.animate(
-    [{ transform: 'perspective(500px) rotateX(-95deg) scale(0.5)', background: c, opacity: 0 }, { transform: 'perspective(500px) rotateX(0) scale(1)', background: c, opacity: 1, offset: 0.4 },
-      { transform: 'none', background: c, offset: 0.7 }, { transform: 'none', background: bg, opacity: 1 }],
-    { duration: 760, delay: d * 460, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both' }).finished)
-  Promise.all(cover).then(() => {
-    swap()
-    const out = tiles.map(({ t, d }) => t.animate([{ transform: 'none', opacity: 1 }, { transform: 'scale(0.2) rotate(35deg)', opacity: 0 }], { duration: 360, delay: d * 300, easing: 'cubic-bezier(0.5, 0, 0.75, 0)', fill: 'both' }).finished)
-    Promise.all(out).then(() => layer.remove())
-  })
+  turning = true
+  const ease = 'cubic-bezier(0.22, 1, 0.36, 1)', inOut = 'cubic-bezier(0.65, 0, 0.35, 1)'
+  const root = document.body.appendChild(document.createElement('div'))
+  root.className = 'turn'
+  const face = root.appendChild(document.createElement('div'))
+  face.className = 'turn-face'
+  // Scramble with no two neighbouring stickers the same color
+  const palette = ['#ffd60a', '#f0302a', '#ff8a00', '#00c46a', '#2f6bff', '#f6f6f2']
+  const colors: string[] = []
+  for (let i = 0; i < 9; i++) {
+    const options = palette.filter(c => c !== colors[i - 1] || i % 3 === 0).filter(c => c !== colors[i - 3])
+    colors.push(options[(Math.random() * options.length) | 0])
+  }
+  const cells = colors.map(() => face.appendChild(document.createElement('i')))
+  const reach = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))
+  const iris = (from: number, to: number) => [{ clipPath: `circle(${from}px at ${x}px ${y}px)` }, { clipPath: `circle(${to}px at ${x}px ${y}px)` }]
+
+  // 1. Iris opens from the toggle; stickers pop in, nearest first
+  root.animate(iris(0, reach), { duration: 460, easing: ease, fill: 'both' })
+  const box = face.getBoundingClientRect(), cell = box.width / 3
+  await Promise.all(cells.map((el, i) => el.animate(
+    [{ transform: 'scale(0) rotate(-45deg)', background: colors[i] }, { transform: 'none', background: colors[i] }],
+    { duration: 320, delay: 60 + (Math.hypot(box.left + ((i % 3) + 0.5) * cell - x, box.top + (((i / 3) | 0) + 0.5) * cell - y) / reach) * 180, easing: ease, fill: 'both' }).finished))
+
+  // 2. Layer turns: U (top row), R (right column), then F spins the whole face; stickers land on the solved color
+  const flip = (ids: number[], axis: 'X' | 'Y', at: number) => ids.map((i, k) => cells[i].animate([
+    { transform: `perspective(1200px) rotate${axis}(0deg)`, background: colors[i] },
+    { transform: `perspective(1200px) rotate${axis}(90deg)`, background: colors[i], offset: 0.5 },
+    { transform: `perspective(1200px) rotate${axis}(-90deg)`, background: solved, offset: 0.5 },
+    { transform: `perspective(1200px) rotate${axis}(0deg)`, background: solved },
+  ], { duration: 280, delay: at + k * 45, easing: inOut, fill: 'both' }).finished)
+  await Promise.all([
+    ...flip([0, 1, 2], 'Y', 0),
+    ...flip([2, 5, 8], 'X', 150),
+    face.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(90deg)' }], { duration: 400, delay: 300, easing: inOut, fill: 'both' }).finished,
+    ...flip([3, 6, 4, 7], 'X', 330), // last stickers flip mid-spin: colors swap edge-on, never blend
+  ])
+
+  // 3. Solved: a little pop, swap the theme underneath, shrink everything back into the toggle
+  await face.animate([{ transform: 'rotate(90deg) scale(1)' }, { transform: 'rotate(90deg) scale(1.06)' }, { transform: 'rotate(90deg) scale(1)' }], { duration: 180, easing: ease, fill: 'both' }).finished
+  swap()
+  await root.animate(iris(reach, 0), { duration: 400, easing: 'cubic-bezier(0.7, 0, 0.84, 0)', fill: 'both' }).finished
+  root.remove()
+  turning = false
 }

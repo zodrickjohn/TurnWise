@@ -2,7 +2,7 @@ import { useEffect, useState, type MouseEvent } from 'react'
 import { flushSync } from 'react-dom'
 import { SOLVED, type State } from './cube/model.ts'
 import { diagnose, normalize, solve, timeline, validate, type Chunk } from './cube/solver.ts'
-import { Icon, colorName, load, save, stickerWave } from './ui.tsx'
+import { Icon, colorName, load, save, themeTurn } from './ui.tsx'
 import Home from './views/Home.tsx'
 import Learn from './views/Learn.tsx'
 import Input from './views/Input.tsx'
@@ -52,7 +52,7 @@ export default function App() {
   const toggleTheme = (e: MouseEvent<HTMLButtonElement>) => {
     const next: Theme = theme === 'dark' ? 'light' : 'dark'
     const r = e.currentTarget.getBoundingClientRect()
-    stickerWave(r.x + r.width / 2, r.y + r.height / 2, next === 'dark' ? '#121318' : '#eef0f4', () => {
+    themeTurn(r.x + r.width / 2, r.y + r.height / 2, next === 'dark' ? '#2f6bff' : '#ffd60a', () => {
       document.documentElement.dataset.theme = next
       flushSync(() => setTheme(next))
     })

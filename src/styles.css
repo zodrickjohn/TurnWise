@@ -330,8 +330,9 @@ button.big-st:active { transform: scale(0.88); }
 .theme-toggle:hover { transform: translate(-2px, -2px) rotate(-8deg); box-shadow: 5px 5px 0 var(--drop); }
 .theme-toggle svg { animation: icon-in 0.6s var(--ease); }
 @keyframes icon-in { from { transform: rotate(-120deg) scale(0.3); opacity: 0; } }
-.wave { position: fixed; inset: 0; z-index: var(--z-overlay); display: grid; gap: 0; pointer-events: none; overflow: hidden; }
-.wave i { border-radius: 16%; margin: 2px; box-shadow: inset 0 0 0 2px #0002; }
+.turn { position: fixed; inset: 0; z-index: var(--z-overlay); display: grid; place-items: center; background: #08090b; pointer-events: none; }
+.turn-face { --side: min(72vmin, 560px); width: var(--side); height: var(--side); display: grid; grid-template-columns: repeat(3, 1fr); gap: 3%; padding: 3%; background: #000; border-radius: 9%; box-shadow: 0 0 0 2px #ffffff14, 0 30px 80px #000; }
+.turn-face i { border-radius: 12%; box-shadow: inset 0 -8px 0 #0003, inset 0 5px 0 #fff4; backface-visibility: hidden; }
 
 /* Mistake recovery */
 .mismatch { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 18px 16px; padding: 10px; border: 2.5px dashed color-mix(in srgb, var(--ink) 45%, transparent); border-radius: 12px; background: none; font-weight: 700; transition: background 0.2s, border-color 0.2s; }
