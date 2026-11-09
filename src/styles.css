@@ -282,7 +282,7 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 24px 64px; }
 
 /* App pages: lesson column + sticky cube stage */
 .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.95fr); gap: 40px; padding-top: 32px; align-items: start; }
-.lesson { display: grid; gap: 24px; align-content: start; min-width: 0; }
+.lesson { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-content: start; min-width: 0; } /* one wide child can't widen every card */
 .page-head { display: grid; gap: 10px; }
 .panel { display: grid; gap: 12px; padding: 24px; background: var(--card); border: var(--line); border-radius: var(--rad); box-shadow: var(--sh); }
 .panel p { max-width: 62ch; }
@@ -306,7 +306,7 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 24px 64px; }
 .ok { color: #006a37; font-weight: 700; }
 .bad { color: #b3140c; font-weight: 700; }
 .pad { display: grid; gap: 10px; }
-.pad.big { grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); column-gap: 18px; } /* many rows: two columns where they fit */
+.pad.big { grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr)); column-gap: 18px; } /* many rows: two columns where they fit */
 .pad-row { display: flex; align-items: center; gap: 10px; }
 .pad-label { width: 7.5rem; font-weight: 700; color: var(--ink-2); }
 .key-btn { width: 3.4rem; height: 3.4rem; font-size: 1.05rem; border-width: 3px; box-shadow: var(--sh-sm); }
@@ -607,8 +607,15 @@ button.big-st:active { transform: scale(0.88); }
   .practice-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .theme-toggle { width: 40px; height: 40px; }
 }
+/* Menu labels only where they fit beside the logo and theme button */
+@media (max-width: 700px) { .journey .label-short { display: none; } }
+/* The smallest phones: a tighter header and switches */
+@media (max-width: 380px) {
+  .bar { gap: 8px; padding: 8px 12px; }
+  .journey { gap: 2px; }
+  .journey button { padding: 4px; }
+}
 @media (max-width: 520px) {
-  .journey .label-short { display: none; }
   .hero .actions .btn { flex: 1 1 100%; }
   .brand > span:last-child { display: none; }
   .rail { gap: 4px; }
@@ -629,7 +636,7 @@ button.big-st:active { transform: scale(0.88); }
 .practice-steps button.on .stars i.on { background: #000; }
 
 /* Practice: mode switch, setup player, real-cube badge */
-.mode-switch { display: inline-flex; justify-self: start; padding: 4px; gap: 4px; border: var(--line); border-radius: 14px; background: var(--card); box-shadow: var(--sh-sm); }
+.mode-switch { display: inline-flex; flex-wrap: wrap; max-width: 100%; justify-self: start; padding: 4px; gap: 4px; border: var(--line); border-radius: 14px; background: var(--card); box-shadow: var(--sh-sm); }
 .practice-switches { display: flex; flex-wrap: wrap; gap: 10px; }
 .method { display: grid; gap: 8px; justify-items: start; }
 .method-note { color: var(--ink-2); font-size: 0.95rem; max-width: 46ch; }
@@ -640,6 +647,7 @@ button.big-st:active { transform: scale(0.88); }
 .method-bar button:disabled { opacity: 0.6; cursor: progress; }
 @media (max-width: 960px) { .method-bar { gap: 4px; } .method-bar button { padding: 5px 9px; font-size: 0.8rem; } } /* one row on phones */
 .mode-switch button { padding: 9px 16px; border: 0; border-radius: 10px; background: none; font-weight: 700; transition: background 0.2s var(--ease), color 0.2s; }
+@media (max-width: 380px) { .mode-switch button { padding: 8px 8px; font-size: 0.84rem; } } /* after the base rule so it wins: the three methods fit on one row */
 .mode-switch button[aria-checked='true'] { background: var(--ink); color: var(--card); }
 .ps-badges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .real-badge { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px 1px 4px; border-radius: 999px; background: var(--g); color: #000; border: 2px solid var(--ink); font-size: 0.72rem; font-weight: 700; }
