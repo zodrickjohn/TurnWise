@@ -116,6 +116,20 @@ export default function Solve({ puzzle: { start, plan, size, level }, again, pra
   })
   useEffect(() => { done ? toTop() : document.querySelector('.line.current')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [pos])
 
+  // Speed and the slip check: inside the cube panel on wide screens, in the scrolling page on phones (CSS shows one)
+  const extras = (
+    <>
+      <div className="speed" role="radiogroup" aria-label="Animation speed">
+        {SPEEDS.map(([label, ms]) => <button key={label} role="radio" aria-checked={speed === ms} onClick={() => setSpeed(ms)}>{label}</button>)}
+        <span className="keys"><kbd className="key">←</kbd> <kbd className="key">→</kbd> step, <kbd className="key">space</kbd> plays</span>
+      </div>
+      {!done && (
+        <button className="mismatch" onClick={() => onMismatch(states[pos], pos)}>
+          <Icon name="search" size={18} /> My cube doesn't match the screen
+        </button>
+      )}
+    </>
+  )
   const info = STAGES[stage]
   const phase = PHASES[phaseOf(stage, PHASES)]
   return (
@@ -158,22 +172,15 @@ export default function Solve({ puzzle: { start, plan, size, level }, again, pra
               <button className="btn white icon" onClick={() => step(-1)} disabled={pos === 0 || !!pending} aria-label="Previous move (left arrow)"><Icon name="prev" /></button>
               {pending
                 ? <button className="btn yellow play" onClick={playFix}><Icon name="undo" /> Play the fix</button>
-                : <button className="btn yellow play" onClick={playLine} disabled={done}><Icon name={playing ? 'pause' : 'play'} /> {playing ? 'Pause' : 'Play this line'}</button>}
+                : <button className="btn yellow play" onClick={playLine} disabled={done} aria-label={playing ? 'Pause' : 'Play this line'}><Icon name={playing ? 'pause' : 'play'} /> <span className="play-text">{playing ? 'Pause' : 'Play this line'}</span></button>}
               <button className="btn white icon" onClick={() => step(1)} disabled={done || !!pending} aria-label="Next move (right arrow)"><Icon name="next" /></button>
             </div>
-            <div className="speed" role="radiogroup" aria-label="Animation speed">
-              {SPEEDS.map(([label, ms]) => <button key={label} role="radio" aria-checked={speed === ms} onClick={() => setSpeed(ms)}>{label}</button>)}
-              <span className="keys"><kbd className="key">←</kbd> <kbd className="key">→</kbd> step, <kbd className="key">space</kbd> plays</span>
-            </div>
-            {!done && (
-              <button className="mismatch" onClick={() => onMismatch(states[pos], pos)}>
-                <Icon name="search" size={18} /> My cube doesn't match the screen
-              </button>
-            )}
+            {extras}
           </div>
         </aside>
 
         <article className="lesson">
+          <div className="stage-extras">{extras}</div>
           {done ? (
             <section className="finish">
               <Confetti />

@@ -31,44 +31,57 @@ export function ScrollSolve() {
   const [i, setI] = useState(-1) // turn being shown in the active step
 
   useEffect(() => {
-    const el = ride.current!
+    const el = ride.current!, phone = matchMedia('(max-width: 960px)')
     let x = NaN, vx = 0, ptx = NaN, last = performance.now(), size = '', active = 0, raf = 0
+    const show = (a: number) => { if (a !== active) { active = a; setK(a) } }
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame)
       const dt = Math.max(0.001, Math.min(0.05, (now - last) / 1000))
       last = now
       const rows = [...list.current!.children] as HTMLElement[]
+      const texts = rows.map(r => r.querySelector('.ss-text')!.getBoundingClientRect())
+      // Crossing k: starts when step k's text reaches `line`, ends when step k+1's text is centred in the reading area
+      const progress = (line: number, middle: number) => {
+        let p = 0
+        for (let k = 0; k < texts.length - 1; k++) {
+          const a = texts[k].top - line, b = texts[k + 1].top + texts[k + 1].height / 2 - middle
+          p += clamp01(-a / (b - a))
+        }
+        const n = Math.min(rows.length - 2, Math.floor(p))
+        return [n, clamp01(p - n)] as const
+      }
+      // Phones: the cube stays in a band pinned under the header while the steps scroll beneath it. Between steps it dips
+      // and swells with the scroll and swaps to the next step at the smallest point, so it is never off screen or empty
+      if (phone.matches) {
+        const band = el.getBoundingClientRect().bottom, [n, e] = progress(band, (band + innerHeight) / 2)
+        el.style.transform = el.style.width = el.style.height = ''
+        ;(el.firstElementChild as HTMLElement).style.transform = `scale(${(1 - 0.3 * Math.sin(Math.PI * e)).toFixed(3)})`
+        if (cube.current) cube.current.yaw = Math.sin(Math.PI * e) * (n % 2 ? -0.6 : 0.6) // a small turn while it dips
+        return show(n + (e >= 0.5 ? 1 : 0))
+      }
+      ;(el.firstElementChild as HTMLElement).style.transform = ''
       const slots = rows.map(r => r.querySelector<HTMLElement>('.ss-slot')!)
       const mid = innerHeight / 2 - body.current!.getBoundingClientRect().top
       const centers = rows.map(r => r.offsetTop + r.offsetHeight / 2)
-      // Crossing k: starts when step k's text touches the header line, ends when step k+1's text reaches mid-screen
-      const line = document.querySelector('.bar')!.getBoundingClientRect().bottom
-      const texts = rows.map(r => r.querySelector('.ss-text')!.getBoundingClientRect())
-      let p = 0
-      for (let k = 0; k < texts.length - 1; k++) {
-        const a = texts[k].top - line, b = texts[k + 1].top + texts[k + 1].height / 2 - innerHeight / 2
-        p += clamp01(-a / (b - a))
-      }
-      const n = Math.min(rows.length - 2, Math.floor(p)), e = clamp01(p - n) // linear: the spring eases both ends
+      const [n, e] = progress(document.querySelector('.bar')!.getBoundingClientRect().bottom, innerHeight / 2) // linear: the spring eases both ends
       const A = slots[n], B = slots[n + 1]
       const y = A.offsetTop + (B.offsetTop - A.offsetTop) * e + Math.max(-50, Math.min(50, (mid - centers[n] - (centers[n + 1] - centers[n]) * e) * 0.14)) // trails the page a little: depth
       const lefts = slots.map(s => s.offsetLeft), lo = Math.min(...lefts), span = Math.max(...lefts) - lo
       const tx = A.offsetLeft + (B.offsetLeft - A.offsetLeft) * e
-      if (isNaN(x) || reduceMotion || !span) { x = tx; vx = 0 }
+      if (isNaN(x) || reduceMotion) { x = tx; vx = 0 }
       const vt = isNaN(ptx) ? 0 : Math.max(-MAXV, Math.min(MAXV, (tx - ptx) / dt)) // feed-forward the target's speed
       ptx = tx
       vx += (W * W * (tx - x) + 2 * W * (vt - vx)) * dt
       x += vx * dt
-      const side = span ? clamp01((x - lo) / span) : 0 // 0 left column, 1 right column
-      // Two columns: shrink while crossing so the cube never covers text. Stacked (phones): pop out and into the next slot
-      const scale = span ? 1 - 0.52 * Math.sin(Math.PI * side) : Math.abs(1 - 2 * e)
+      const side = clamp01((x - lo) / span) // 0 left column, 1 right column
+      const scale = 1 - 0.52 * Math.sin(Math.PI * side) // shrink while crossing so the cube never covers text
       const sz = `${A.offsetWidth}x${A.offsetHeight}`
       if (sz !== size) { size = sz; el.style.width = A.offsetWidth + 'px'; el.style.height = A.offsetHeight + 'px' }
-      el.style.transform = `translate3d(${x.toFixed(1)}px, ${(span ? y : e < 0.5 ? A.offsetTop : B.offsetTop).toFixed(1)}px, 0) scale(${Math.max(0.001, scale).toFixed(3)})`
+      el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) scale(${scale.toFixed(3)})`
       if (cube.current) cube.current.yaw = 0.4 - 0.8 * side - Math.max(-0.7, Math.min(0.7, vx * 0.0006)) // face the text, lean into the glide
       // The step changes once the cube has actually crossed to the new step's side
       const a = n + (e >= 0.5 ? 1 : 0)
-      if (a !== active && (!span || (slots[a].offsetLeft > lo + span / 2) === side >= 0.5)) { active = a; setK(a) }
+      if ((slots[a].offsetLeft > lo + span / 2) === side >= 0.5) show(a)
     }
     raf = requestAnimationFrame(frame)
     return () => cancelAnimationFrame(raf)
