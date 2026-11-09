@@ -237,8 +237,8 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 24px 64px; }
 .t-sky { background: #18204a; --ink: #fff; --ink-2: #c9d2f2; color: #fff; }
 .demo { height: 124px; display: grid; place-items: center; margin-bottom: 6px; }
 /* Learn: keys press in sequence */
-.demo-keys { display: flex; gap: 10px; }
-.demo-keys kbd { display: grid; place-items: center; min-width: 58px; height: 58px; border: 3px solid #000; border-radius: 12px; background: #fff; color: #000; font: 800 1.2rem var(--display); box-shadow: 0 6px 0 #000;
+.demo-keys { display: flex; gap: clamp(6px, 2.4vw, 10px); }
+.demo-keys kbd { display: grid; place-items: center; min-width: clamp(46px, 14vw, 58px); height: clamp(46px, 14vw, 58px); border: 3px solid #000; border-radius: 12px; background: #fff; color: #000; font: 800 1.2rem var(--display); box-shadow: 0 6px 0 #000;
   animation: key-press 2.4s calc(var(--d) * 0.45s) infinite; }
 @keyframes key-press { 0%, 22%, 100% { transform: none; box-shadow: 0 6px 0 #000; background: #fff; } 8% { transform: translateY(6px); box-shadow: 0 0 0 #000; background: var(--o); } }
 /* Scan: a viewfinder sweeps and its dots fill with detected colors */
@@ -566,7 +566,7 @@ button.big-st:active { transform: scale(0.88); }
   .ss-step h3 { font-size: 1.6rem; }
   .ss-goal { font-size: 1rem; }
   .ss-step .tile.lg { font-size: 0.9rem; }
-  .bento { grid-template-columns: 1fr; }
+  .bento { grid-template-columns: minmax(0, 1fr); } /* a card's demo can't widen the column past the screen */
   .tile-card, .t-practice, .t-sky { grid-column: auto; }
   .t-practice, .t-sky { grid-template-columns: 1fr; grid-template-areas: 'demo' 'title' 'text'; }
   .split, .solve { grid-template-columns: 1fr; gap: 24px; }
