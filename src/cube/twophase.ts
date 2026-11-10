@@ -20,8 +20,13 @@ const CORNER_ID = new Map(CORNERS.map((p, i) => [setKey(p.map(k => SOLVED[k])), 
 const EDGE_ID = new Map(EDGES.map((p, i) => [setKey(p.map(k => SOLVED[k])), i]))
 
 type Cubie = { cp: number[]; co: number[]; ep: number[]; eo: number[] }
+// Each center's color mapped to the standard one for its face, so a cube held turned (after a y) reads like the usual layout
+const CENTERS = [4, 13, 22, 31, 40, 49]
+const centerMap = (s: State): Record<string, string> => { const cs = CENTERS.map(i => s[i]); return new Set(cs).size === 6 ? Object.fromEntries(cs.map((c, k) => [c, SOLVED[CENTERS[k]]])) : {} }
 // Read pieces off stickers: which piece sits in each spot, and how it is turned
 export function toCubie(s: State): Cubie {
+  const map = centerMap(s)
+  s = s.map(c => map[c] ?? c)
   const cp: number[] = [], co: number[] = [], ep: number[] = [], eo: number[] = []
   CORNERS.forEach(p => { const cs = p.map(k => s[k]); cp.push(CORNER_ID.get(setKey(cs))!); co.push(cs.findIndex(c => UDCOL.has(c))) })
   EDGES.forEach(p => { const cs = p.map(k => s[k]), id = EDGE_ID.get(setKey(cs))!; ep.push(id); eo.push(cs[0] === SOLVED[EDGES[id][0]] ? 0 : 1) })
@@ -212,6 +217,8 @@ function setTable(kind: 'e' | 'c', ids: number[]) {
 
 // Shortest moves that put the four given pieces home (the rest of the cube is ignored)
 export function optimalSet(s: State, kind: 'e' | 'c', colors: string): string {
+  const map = centerMap(s)
+  s = s.map(c => map[c] ?? c); colors = map[colors] ?? colors
   const pieces = kind === 'e' ? EDGES : CORNERS, idMap = kind === 'e' ? EDGE_ID : CORNER_ID
   const ids = pieces.map((p, i) => [p, i] as const).filter(([p]) => p.some(k => SOLVED[k] === colors)).map(([, i]) => i)
   const T = setTable(kind, ids), k = kind === 'e' ? 2 : 3
