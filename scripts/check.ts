@@ -226,3 +226,13 @@ import { planSmall } from '../src/cube/methods.ts'
   }
   console.log(`intermediate practice and hint-following ok (${((performance.now() - t0) / 1000).toFixed(1)}s)`)
 }
+
+// Patterns undo to solved
+import { PATTERNS } from '../src/cube/patterns.ts'
+{
+  for (const p of PATTERNS) {
+    const s = move(SOLVED, p.alg)
+    assert(!isSolved(s) && isSolved(move(s, toMoves(p.alg).reverse().map(invertMove).join(' '))), `${p.name} undoes`)
+  }
+  console.log('patterns ok')
+}

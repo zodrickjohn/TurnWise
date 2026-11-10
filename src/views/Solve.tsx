@@ -11,9 +11,9 @@ import { stickerBurst } from '../cubie.ts'
 
 const SPEEDS: [string, number][] = [['Slow', 950], ['Normal', 600], ['Fast', 320]]
 export type Fix = { at: number; wrong: string }
-type Props = { puzzle: Puzzle; again: () => void; practice: () => void; onMismatch: (expected: State, pos: number) => void; fix?: Fix; notice?: string; onLevel: (l: Level) => Promise<unknown> | null }
+type Props = { puzzle: Puzzle; again: () => void; practice: () => void; patterns: () => void; onMismatch: (expected: State, pos: number) => void; fix?: Fix; notice?: string; onLevel: (l: Level) => Promise<unknown> | null }
 
-export default function Solve({ puzzle: { start, plan, size, level }, again, practice, onMismatch, fix, notice, onLevel }: Props) {
+export default function Solve({ puzzle: { start, plan, size, level }, again, practice, patterns, onMismatch, fix, notice, onLevel }: Props) {
   const { stages: STAGES, phases: PHASES, art: STEP_ART } = kitFor(size, level)
   const [replanning, setReplanning] = useState<Level | null>(null)
   const switchTo = (l: Level) => { if (l === level || replanning) return; setReplanning(l); onLevel(l)?.catch(() => setReplanning(null)) }
@@ -190,6 +190,7 @@ export default function Solve({ puzzle: { start, plan, size, level }, again, pra
               <div className="actions">
                 <button className="btn yellow" onClick={again}>Solve another cube <Icon name="arrow" size={18} /></button>
                 <button className="btn white" onClick={practice}>Practice a step on your own</button>
+                {size === 3 && <button className="btn white" onClick={patterns}>Make a pattern</button>}
                 <button className="btn ghost" onClick={() => jump(0)}><Icon name="reset" size={18} /> Replay from the start</button>
               </div>
             </section>

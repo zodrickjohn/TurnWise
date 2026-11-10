@@ -5,6 +5,7 @@ import { STAGES, solve, timeline } from '../cube/solver.ts'
 import { wait } from '../cubie.ts'
 import { CubeView, LEVEL_MOVES, LEVEL_NAME, Mini, PHASES, Tiles, faceColor, phaseOf, reduceMotion } from '../ui.tsx'
 import { LEVELS } from '../cube/methods.ts'
+import { PATTERNS } from '../cube/patterns.ts'
 import type { View } from '../App.tsx'
 
 // Scroll-through solve: the cube is locked to scroll vertically and springs sideways into the active step's slot
@@ -199,6 +200,13 @@ export function Showcase({ go }: { go: (v: View) => void }) {
           <div className="demo demo-sky" aria-hidden="true"><span className="orb sun" /><span className="orb moon" /></div>
           <h3>Day and night</h3>
           <p>Cubie handles the theme switch personally. Click to see how.</p>
+        </button>
+        <button className="tile-card t-sizes t-patterns reveal" style={tile(5)} onClick={() => go('patterns')}>
+          <div className="demo demo-patterns" aria-hidden="true">
+            <div className="sizes">{PATTERNS.slice(0, 5).map(p => <Mini key={p.name} pattern={move(SOLVED, p.alg).slice(18, 27).join('')} label="" />)}</div>
+          </div>
+          <h3>Make a pattern</h3>
+          <p>Checkerboards, spots, a cube inside a cube. Eight patterns to make on your solved cube, and how to undo each one.</p>
         </button>
       </div>
     </section>

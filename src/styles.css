@@ -41,7 +41,7 @@
 :root[data-theme='dark'] { --t: 1; color-scheme: dark; }
 :root.scrubbing { transition: none; } /* the toggle is being dragged: --t follows the pointer */
 /* Sticker-colored surfaces always carry black ink, whatever the theme */
-.btn.yellow, .t-y, .t-o, .t-g, .t-w, .t-learn, .t-practice, .cta-band, .hold, .next-panel, .grip-chip, .demo-step, .stamp, .journey .on button,
+.btn.yellow, .t-y, .t-o, .t-g, .t-w, .t-learn, .t-practice, .t-patterns, .cta-band, .hold, .next-panel, .grip-chip, .demo-step, .stamp, .journey .on button,
 .face-tabs button.on, .tone-g .step-badge, .tone-y .step-badge, .tick, .swatch, .chip.par {
   --ink: #000; --ink-2: #2a2e37; --card: #fff; color: #000;
 }
@@ -517,6 +517,17 @@ button.big-st:active { transform: scale(0.88); }
 .practice-steps button:hover { transform: translate(calc(-2px * var(--lx)), -2px); box-shadow: var(--sh-sm); }
 .practice-steps button.on { background: var(--y); color: #000; --ink: #000; box-shadow: calc(4px * var(--lx)) 4px 0 var(--drop); transform: translate(calc(-2px * var(--lx)), -2px); }
 .practice-steps .mini { --m: 9px; }
+.pattern-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 22px; }
+.pattern { display: flex; align-items: center; gap: 12px; padding: 10px 12px; text-align: left; color: var(--ink); border: var(--line); border-radius: 14px; background: var(--card); transition: transform 0.15s var(--ease), box-shadow 0.15s var(--ease); }
+.pattern:hover { transform: translate(calc(-2px * var(--lx)), -2px); box-shadow: var(--sh-sm); }
+.pattern[aria-checked='true'] { background: var(--y); color: #000; --ink: #000; box-shadow: calc(4px * var(--lx)) 4px 0 var(--drop); transform: translate(calc(-2px * var(--lx)), -2px); }
+.pattern .mini { --m: 11px; }
+.pattern span { display: grid; line-height: 1.25; }
+.pattern small { color: var(--ink-2); font-size: 0.85rem; }
+.patterns .panel .tiles { margin-top: 6px; }
+.t-patterns { background: var(--o); }
+.demo-patterns .sizes { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.demo-patterns .mini { --m: 14px; }
 .cta-band .actions { margin-top: 0; align-items: center; }
 .install-tip { margin: 0; max-width: 40ch; font-size: 0.95rem; }
 .ps-title { font-weight: 700; font-size: 0.9rem; line-height: 1.25; }
@@ -598,9 +609,13 @@ button.big-st:active { transform: scale(0.88); }
   :is(.learn, .solve, .practice) .stage .coach-bubble { margin: 0; padding: 7px 10px; font-size: 0.85rem; }
   :is(.learn, .solve, .practice) .stage .coach-bubble::before { display: none; }
   :is(.learn, .solve, .practice) .stage .say-move .tile.xl { font-size: 0.9rem; }
-  .solve .transport { grid-area: play; align-self: start; border: 0; padding: 4px 10px 10px 0; gap: 6px; justify-content: flex-start; }
-  .solve .transport .btn { padding: 8px 10px; }
-  .solve .transport .play { flex: 1; justify-content: center; }
+  :is(.solve, .patterns) .transport { grid-area: play; align-self: start; border: 0; padding: 4px 10px 10px 0; gap: 6px; justify-content: flex-start; }
+  :is(.solve, .patterns) .transport .btn { padding: 8px 10px; }
+  :is(.solve, .patterns) .transport .play { flex: 1; justify-content: center; }
+  .pattern { gap: 9px; padding: 8px 10px; }
+  .pattern .mini { --m: 9px; }
+  .pattern b { font-size: 0.95rem; }
+  .patterns .transport .play { min-width: 0; }
   .solve .play-text { display: none; }
   .solve .stage-card :is(.speed, .mismatch) { display: none; }
   .stage-extras { display: grid; gap: 10px; justify-items: start; }
@@ -668,3 +683,7 @@ button.big-st:active { transform: scale(0.88); }
 .more { font-size: 0.85rem; font-weight: 700; color: var(--ink-2); padding: 4px 10px; border: 2px dashed color-mix(in srgb, var(--ink) 35%, transparent); border-radius: 999px; }
 .alt-source { display: grid; gap: 10px; padding: 14px; border: 2.5px dashed color-mix(in srgb, var(--ink) 35%, transparent); border-radius: 14px; }
 .alt-source .row { display: flex; flex-wrap: wrap; gap: 10px; }
+@media (max-width: 420px) { /* small phones: the pattern controls get their own row under the cube */
+  .patterns .stage-card { grid-template-areas: 'cube say' 'play play'; }
+  .patterns .transport { padding: 0 10px 10px; }
+}

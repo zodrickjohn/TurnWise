@@ -13,8 +13,9 @@ import Learn from './views/Learn.tsx'
 import Input from './views/Input.tsx'
 import Solve, { type Fix } from './views/Solve.tsx'
 import Practice from './views/Practice.tsx'
+import Patterns from './views/Patterns.tsx'
 
-export type View = 'home' | 'learn' | 'input' | 'solve' | 'practice'
+export type View = 'home' | 'learn' | 'input' | 'solve' | 'practice' | 'patterns'
 export type Puzzle = { start: State; plan: Chunk[][]; size: Size; level: Level }
 type Theme = 'light' | 'dark'
 // Empty paint boards: odd cubes keep their fixed centers, 2×2 and 4×4 start fully blank
@@ -41,7 +42,7 @@ function restorePuzzle(): Puzzle | null {
 }
 
 // Each page has its own address, so Back, Forward and refresh land where people expect
-const ROUTE: Record<View, string> = { home: '', learn: 'learn', input: 'paint', solve: 'solve', practice: 'practice' }
+const ROUTE: Record<View, string> = { home: '', learn: 'learn', input: 'paint', solve: 'solve', practice: 'practice', patterns: 'patterns' }
 const fromHash = (): View => (Object.keys(ROUTE) as View[]).find(v => ROUTE[v] && location.hash === '#/' + ROUTE[v]) ?? 'home'
 const urlOf = (v: View) => (ROUTE[v] ? '#/' + ROUTE[v] : location.pathname + location.search)
 const JOURNEY: [View, string, string][] = [['learn', 'Learn the moves', 'Learn'], ['input', 'Paint your cube', 'Paint'], ['solve', 'Solve it', 'Solve'], ['practice', 'Practice', 'Practice']]
@@ -199,9 +200,10 @@ export default function App() {
         {view === 'solve' && puzzle && (
           <Solve key={`${puzzle.start.join('')}-${session}`} puzzle={puzzle} fix={fix} notice={notice} onLevel={replan}
             again={() => go('input', () => { setSize(puzzle.size); setPaintOf(puzzle.size)(BLANKS[puzzle.size]); setRepair(null) })}
-            practice={() => go('practice')}
+            practice={() => go('practice')} patterns={() => go('patterns')}
             onMismatch={(expected, pos) => go('input', () => { setPaintOf(puzzle.size)(puzzle.size === 2 ? cornersOnly(expected) : normalizeAny(expected, puzzle.size)); setRepair(pos) })} />
         )}
+        {view === 'patterns' && <Patterns go={go} />}
         {view === 'practice' && <Practice key={size} size={size} setSize={setSize} painted={validateAny(paints[size], size) ? undefined : paints[size]} />}
       </main>
     </>
