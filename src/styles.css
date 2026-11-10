@@ -231,6 +231,14 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 24px 64px; }
 .t-practice .demo, .t-sky .demo { grid-area: demo; margin: 0; }
 .t-practice h3, .t-sky h3 { grid-area: title; align-self: end; }
 .t-practice p, .t-sky p { grid-area: text; align-self: start; }
+.t-sizes { grid-column: span 6; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'title demo' 'text demo'; column-gap: 28px; align-content: center; }
+.t-sizes .demo { grid-area: demo; height: auto; margin: 0; display: grid; gap: 14px; justify-items: center; }
+.t-sizes h3 { grid-area: title; align-self: end; font-size: 1.35rem; }
+.t-sizes p { grid-area: text; align-self: start; max-width: 46ch; }
+.demo-sizes .sizes { display: flex; align-items: end; gap: 12px; }
+.demo-sizes .mini { --m: 10px; }
+.demo-sizes .levels { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.demo-sizes .levels span { padding: 3px 10px; border: 2.5px solid var(--ink); border-radius: 999px; font-size: 0.82rem; background: var(--card); }
 .t-learn { background: var(--y); }
 .t-practice { background: var(--g); }
 .t-scan { background: var(--b); --ink: #fff; --ink-2: #e6ecff; color: #fff; }
@@ -567,8 +575,8 @@ button.big-st:active { transform: scale(0.88); }
   .ss-goal { font-size: 1rem; }
   .ss-step .tile.lg { font-size: 0.9rem; }
   .bento { grid-template-columns: minmax(0, 1fr); } /* a card's demo can't widen the column past the screen */
-  .tile-card, .t-practice, .t-sky { grid-column: auto; }
-  .t-practice, .t-sky { grid-template-columns: 1fr; grid-template-areas: 'demo' 'title' 'text'; }
+  .tile-card, .t-practice, .t-sky, .t-sizes { grid-column: auto; }
+  .t-practice, .t-sky, .t-sizes { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'demo' 'title' 'text'; }
   .split, .solve { grid-template-columns: 1fr; gap: 24px; }
   .rail { top: 61px; padding: 10px 0 6px; }
   .learn .stage { order: -1; position: sticky; top: 64px; z-index: var(--z-sticky); }

@@ -3,7 +3,8 @@ import type { Cube3D } from '../cube/Cube3D.ts'
 import { SOLVED, invertMove, move, scramble } from '../cube/model.ts'
 import { STAGES, solve, timeline } from '../cube/solver.ts'
 import { wait } from '../cubie.ts'
-import { CubeView, PHASES, Tiles, faceColor, phaseOf, reduceMotion } from '../ui.tsx'
+import { CubeView, LEVEL_MOVES, LEVEL_NAME, Mini, PHASES, Tiles, faceColor, phaseOf, reduceMotion } from '../ui.tsx'
+import { LEVELS } from '../cube/methods.ts'
 import type { View } from '../App.tsx'
 
 // Scroll-through solve: the cube is locked to scroll vertically and springs sideways into the active step's slot
@@ -166,6 +167,14 @@ export function Showcase({ go }: { go: (v: View) => void }) {
     <section className="showcase" aria-labelledby="show-h">
       <h2 id="show-h">Everything you need, from scrambled to solved</h2>
       <div className="bento">
+        <button className="tile-card t-sizes reveal" style={tile(0)} onClick={() => go('input')}>
+          <div className="demo demo-sizes" aria-hidden="true">
+            <div className="sizes">{[2, 3, 4, 5].map(n => <Mini key={n} pattern={Array.from({ length: n * n }, (_, i) => 'gyrbow'[(i * 7 + n) % 6]).join('')} label="" />)}</div>
+            <div className="levels">{LEVELS.map(l => <span key={l}><b>{LEVEL_NAME[l]}</b> ~{LEVEL_MOVES[3][l]} moves</span>)}</div>
+          </div>
+          <h3>Any cube, at your level</h3>
+          <p>2×2 to 5×5. Learn the beginner's way, step up to intermediate, or follow the shortest solve the computer can find. Move counts shown are for a 3×3.</p>
+        </button>
         <button className="tile-card t-learn reveal" style={tile(0)} onClick={() => go('learn')}>
           <div className="demo demo-keys" aria-hidden="true">{["R", "U", "R'", "U'"].map((m, i) => <kbd key={m} style={{ '--d': i } as CSSProperties}>{m}</kbd>)}</div>
           <h3>Learn the moves</h3>

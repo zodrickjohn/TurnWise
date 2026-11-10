@@ -57,8 +57,8 @@ export default function Home({ go, resume }: { go: (v: View) => void; resume: bo
             {'Solve your cube. Understand every turn.'.split(' ').map((w, i) => <span key={i} className="w" aria-hidden="true" style={{ '--i': i } as CSSProperties}>{w} </span>)}
           </h1>
           <p className="lede">
-            Paint in your scrambled cube's colors. Turnwise walks you through the beginner's method one move at a time,
-            and tells you what to look for and why each move works.
+            Paint or scan any cube from 2×2 to 5×5. Turnwise walks you through it one move at a time: learn the beginner's
+            method with why every move works, step up to intermediate, or follow the shortest expert solve.
           </p>
           <div className="actions">
             {resume ? <>
