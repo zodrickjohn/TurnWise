@@ -310,7 +310,7 @@ export function diagnose(states: State[], pos: number, actual: State, size: Size
   return { kind: 'new', at: 0 }
 }
 
-const pick = <T,>(xs: T[]) => xs[(Math.random() * xs.length) | 0]
+export const pick = <T,>(xs: T[]) => xs[(Math.random() * xs.length) | 0]
 const SPIN = ['U', "U'", 'U2']
 // Algorithms that scramble step k but keep every earlier step finished, and how many to mix in
 const SETUP: [string[], number][] = [
@@ -334,12 +334,4 @@ export function practiceSetup(k: number, size: Size = 3) {
     if (par) return { setup, start, par }
   }
   throw new Error('No practice setup found')
-}
-
-// From any cube (e.g. a scanned scramble): the guide's steps before k as setup moves, then step k is left to practice
-export function practiceFrom(cube: State, k: number) {
-  const setup = simplify(solve(cube).slice(0, k).flatMap(chunks => chunks.flatMap(ch => ch.lines.map(l => l.alg))).join(' '))
-  const start = move(cube, setup)
-  const par = toMoves(solve(start)[k].flatMap(ch => ch.lines.map(l => l.alg)).join(' ')).length
-  return { setup, start, par }
 }

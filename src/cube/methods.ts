@@ -1,7 +1,7 @@
 // Intermediate and expert methods for the 2×2 and 3×3; big cubes reuse them for their 3×3 part
-import { FACES, PIECES, SCHEME, SOLVED, STICKERS, isSolved, move, toMoves, type Size, type State } from './model.ts'
+import { FACES, PIECES, SCHEME, SOLVED, STICKERS, isSolved, move, relabel as afterY, scramble, toMoves, type Size, type State } from './model.ts'
 import { bigCube } from './big.ts'
-import { CORNERS, crossDone, count, f2l, layer, place, placed, positioned, topEdges, turns, whole, type Chunk, type Line, type Opt } from './solver.ts'
+import { CORNERS, crossDone, count, f2l, layer, pick, place, placed, positioned, stageDone, topEdges, turns, whole, type Chunk, type Line, type Opt } from './solver.ts'
 import { optimal2, optimalSet, twoPhase } from './twophase.ts'
 
 export type Level = 'beginner' | 'intermediate' | 'expert'
@@ -105,7 +105,9 @@ export const ollSteps: Step = (s, bottom, edges) => {
   return [r[0], [...out, ...r[1]]]
 }
 export const pllSteps: Step = (s, bottom, edges) => {
-  const a = whole(s, PLL_CORNERS, x => bottom(x) && topYellow(x) && CORNERS.filter(p => layer(p) === 1).every(p => positioned(x, p)), 4, 'Put the corners in place')
+  // Corners count as in place up to a top turn: the edge step lines the top up, so a hint never undoes the corner step
+  const home = (x: State) => ['', 'U', 'U2', "U'"].some(u => CORNERS.filter(p => layer(p) === 1).every(p => positioned(move(x, u), p)))
+  const a = whole(s, PLL_CORNERS, x => bottom(x) && topYellow(x) && home(x), 4, 'Put the corners in place')
   const b = whole(a[0], edges ? PLL_EDGES : turns('U', 'Turn the top to finish.'), isSolved, 4, edges ? 'Put the edges in place' : 'Finish')
   return [b[0], [...a[1], ...b[1]]]
 }
@@ -135,8 +137,8 @@ const FRAMES = GRIPS.map(g => bigCube(3).move(SOLVED, g))
 const withFrame = (cube: State, f: State) => cube.map((c, k) => (k % 9 === 4 ? f[k] : c))
 const relabel = (cube: State, f: State) => { const map = Object.fromEntries(FACES.map((F, k) => [f[k * 9 + 4], SCHEME[F]])); return cube.map(c => map[c] ?? c) }
 
-// 2×2 intermediate and expert. Returns the framed start (invisible centers) and the plan
-export function solve2(cube: State, level: Level): { start: State; plan: Chunk[][] } {
+// 2×2 intermediate and expert. Returns the framed start (invisible centers) and the plan; keep: stay in the cube's own frame (hints)
+export function solve2(cube: State, level: Level, keep = false): { start: State; plan: Chunk[][] } {
   if (level === 'expert') {
     // The frame where the back-left-bottom corner is already home: then U, R and F alone reach the optimum
     const f = FRAMES.find(fr => [33, 42, 53].every(k => relabel(cube, fr)[k] === SOLVED[k]))!
@@ -145,7 +147,8 @@ export function solve2(cube: State, level: Level): { start: State; plan: Chunk[]
   }
   // Intermediate: the white-down frame with the shortest solve
   const bottom = (x: State) => CORNERS.filter(p => layer(p) === -1).every(p => placed(x, p))
-  const tries = FRAMES.filter(f => f[31] === 'w').map(f => {
+  const own = keep ? FRAMES.filter(f => f.every((c, i) => i % 9 !== 4 || c === cube[i])) : []
+  const tries = (own.length ? own : FRAMES.filter(f => f[31] === 'w')).map(f => {
     const start = withFrame(cube, f), first = optimalSet(relabel(start, f), 'c', 'w')
     const [, oll, pll] = lastLayerSteps(move(start, first), bottom, false)
     const plan = [first ? [{ title: 'Build the white layer', lines: [{ alg: first, note: 'All four white corners home, white facing down.' }] }] : [], oll, pll]
@@ -166,7 +169,22 @@ export function solveExpert(start: State): Chunk[][] {
 }
 
 // Plan any 2×2 or 3×3 at a level (beginner plans come from solver.ts)
-export function planSmall(cube: State, size: Size, level: Level) {
-  if (size === 2) return solve2(cube, level)
+export function planSmall(cube: State, size: Size, level: Level, keep = false) {
+  if (size === 2) return solve2(cube, level, keep)
   return { start: cube, plan: level === 'expert' ? solveExpert(cube) : solveIntermediate(cube) }
+}
+
+// --- Intermediate practice ---
+
+// True once intermediate step k is done (2×2 and 3×3)
+export const stageDoneInt = (k: number, s: State, size: Size): boolean => (size === 2
+  ? [() => stageDone(0, s, 2), () => stageDone(0, s, 2) && topYellow(s), () => isSolved(s)]
+  : [() => stageDone(1, s), () => f2l(s), () => f2l(s) && topYellow(s), () => isSolved(s)])[k]()
+
+// Setup moves from a solved cube to the start of intermediate step k: random algorithms that mix only what step k solves
+export function setupInt(k: number, size: Size) {
+  if (k === 0) return scramble(size === 3 ? 20 : 11)
+  const pool = (size === 2 ? [OLL_CORNERS, PLL_CORNERS] : [F2L, [...OLL_EDGES, ...OLL_CORNERS], [...PLL_CORNERS, ...PLL_EDGES]])[k - 1]
+  const algs = pool.map(o => o.alg).filter(a => toMoves(a).length > 2) // drop the plain U and y turns
+  return Array.from({ length: size === 3 && k === 1 ? 4 : 2 }, () => `${afterY(pick(algs), (Math.random() * 4) | 0)} ${pick(['U', "U'", 'U2', ''])}`).join(' ')
 }

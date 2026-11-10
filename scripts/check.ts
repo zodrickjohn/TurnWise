@@ -76,10 +76,10 @@ for (let k = 0; k < 8; k++) for (let i = 0; i < 20; i++) {
   assert(toMoves(setup).length <= 40, `setup for step ${k + 1} is short: ${setup}`)
 }
 console.log('practice setups ok:', [0, 1, 2, 3, 4, 5, 6, 7].map(k => toMoves(practiceSetup(k).setup).length).join(' / '), 'moves')
-import { practiceFrom } from '../src/cube/solver.ts'
+import { runTask, stageDoneAny } from '../src/cube/bigsolve.ts'
 for (let k = 0; k < 8; k++) {
   const cubeNow = move(SOLVED, scramble())
-  const { start, par } = practiceFrom(cubeNow, k)
+  const { start, par } = runTask({ kind: 'from', cube: cubeNow, step: k, size: 3 }) as { start: string[]; par: number }
   assert(k === 0 || stageDone(k - 1, start), `from a scramble, steps before ${k + 1} are done`)
   assert(par === 0 ? stageDone(k, start) : !stageDone(k, start))
 }
@@ -157,7 +157,6 @@ import { classifyAll } from '../src/cube/colors.ts'
 }
 
 // Practice and the detective for big cubes: setups start each step with earlier steps intact; the detective sees through grips
-import { runTask, stageDoneAny } from '../src/cube/bigsolve.ts'
 import type { Chunk } from '../src/cube/solver.ts'
 {
   const t0 = performance.now()
@@ -190,10 +189,40 @@ import { planSmall } from '../src/cube/methods.ts'
     }
     avg.push(`${size}×${size} ${level} ${(total / 40).toFixed(0)}`)
   }
-  for (const [N, level] of [[4, 'intermediate'], [4, 'expert'], [5, 'expert']] as const) {
+  // Bounds sit well under the beginner's ~325 / ~490: intermediate and expert build centers and pair edges the short way
+  for (const [N, level, bound] of [[4, 'intermediate', 210], [4, 'expert', 150], [5, 'expert', 290]] as const) {
     const b = bigCube(N), A = N * N, mid = (N - 1) >> 1, start = b.move(b.SOLVED, bigScramble())
-    const end = b.move(start, solveBig(start, N, level).flat().flatMap(c => c.lines.map(l => l.alg)).join(' '))
+    const alg = solveBig(start, N, level).flat().flatMap(c => c.lines.map(l => l.alg)).join(' '), end = b.move(start, alg)
     assert(end.every((c, j) => c === end[Math.floor(j / A) * A + mid * N + mid]), `${N}×${N} ${level} solves`)
+    const n = toMoves(alg).filter(m => !/^[xyz]/.test(m)).length
+    assert(n <= bound, `${N}×${N} ${level}: ${n} moves is over ${bound}`)
+    avg.push(`${N}×${N} ${level} ${n}`)
   }
   console.log(`levels ok (avg moves: ${avg.join(', ')}) in ${((performance.now() - t0) / 1000).toFixed(1)}s`)
+}
+
+// Intermediate practice: on-screen deals, real-cube setups and from-a-scramble all start each step with earlier steps intact
+{
+  const t0 = performance.now()
+  type Deal = { start: string[]; par: number; setup?: string }
+  for (const [N, steps] of [[2, [0, 1, 2]], [3, [0, 1, 2, 3]], [4, [4, 5, 6, 7]]] as const) for (const k of steps) for (let i = 0; i < (N === 4 ? 1 : 10); i++) {
+    const ok = (d: Deal, what: string) => assert(!stageDoneAny(k, d.start, N, 'intermediate') && (k === 0 || stageDoneAny(k - 1, d.start, N, 'intermediate')) && d.par > 0, `${N}×${N} intermediate ${what} for step ${k + 1}`)
+    const setup = runTask({ kind: 'setup', step: k, size: N, level: 'intermediate' }) as Deal
+    ok(setup, 'setup'); assert(toMoves(setup.setup!).length <= 60, `short setup: ${setup.setup}`)
+    if (N < 4) ok(runTask({ kind: 'challenge', step: k, size: N, level: 'intermediate' }) as Deal, 'challenge')
+    if (N === 3) { const d = runTask({ kind: 'from', cube: move(SOLVED, scramble()), step: k, size: 3, level: 'intermediate' }) as Deal; assert(k === 0 || stageDoneAny(k - 1, d.start, 3, 'intermediate')) }
+  }
+  // "Show me" plays the first hint line and asks again: following it must always finish the step, even after whole-cube turns
+  const levels = [['intermediate', [[2, [0, 1, 2], 8], [3, [0, 1, 2, 3], 8], [4, [5, 6, 7], 1]]], ['beginner', [[2, [0, 1, 2], 4], [3, [3, 4, 5, 6, 7], 3], [4, [7, 9], 1]]]] as const
+  for (const [level, sets] of levels) for (const [N, steps, runs] of sets) for (const k of steps) for (let i = 0; i < runs; i++) {
+    const turn = N > 3 ? bigCube(N).move : move
+    let s = (runTask({ kind: 'challenge', step: k, size: N, level }) as Deal).start, hints = 0
+    for (; !stageDoneAny(k, s, N, level) && hints < 80; hints++) {
+      const c = runTask({ kind: 'chunks', cube: s, step: k, size: N, level }) as Chunk[] | null
+      assert(c?.[0], `${N}×${N} ${level} step ${k + 1}: a hint while unfinished`)
+      s = turn(s, c[0].lines[0].alg)
+    }
+    assert(hints < 80, `${N}×${N} ${level} step ${k + 1}: following the hints finishes`)
+  }
+  console.log(`intermediate practice and hint-following ok (${((performance.now() - t0) / 1000).toFixed(1)}s)`)
 }

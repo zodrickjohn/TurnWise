@@ -1,9 +1,9 @@
 // Reduction method for 4×4 and 5×5: build the centers, pair the edges, then solve it like a 3×3 (with 4×4 parity fixes)
 import { bigCube, bigScramble } from './big.ts'
 import { FACES, NAME, SOLVED, cornersOnly, move, scramble, simplify, toMoves, type Size, type State } from './model.ts'
-import { firstLayers, ollSteps, pllSteps, planSmall, solveExpert, type Level } from './methods.ts'
+import { firstLayers, ollSteps, pllSteps, planSmall, setupInt, solveExpert, stageDoneInt, type Level } from './methods.ts'
 import { parities } from './twophase.ts'
-import { IMPOSSIBLE, STAGES, STEPS, f2l, diagnose, normalize, practiceFrom, practiceSetup, prepare, stageDone, timeline, validate, type Chunk, type Diagnosis, type Line } from './solver.ts'
+import { IMPOSSIBLE, STAGES, STEPS, f2l, diagnose, normalize, pick, practiceSetup, prepare, solve, SOLVED2, stageDone, timeline, validate, type Chunk, type Diagnosis, type Line } from './solver.ts'
 
 export const STAGES_BIG = [
   {
@@ -58,17 +58,19 @@ function makeKit(N: number) {
   const along = (ids: number[]) => b.STICKERS[ids[0]].pos.find(v => Math.abs(v) !== N - 1) ?? 0 // position along the edge
   const edges = [...groups.values()].map(g => g.sort((x, y) => along(x) - along(y))) // in order, so a 5×5's middle piece sits in the middle
   const compose = (alg: string) => alg.split(' ').filter(Boolean).reduce((p, m) => b.perm(m).map(j => p[j]), b.STICKERS.map((_, i) => i))
+  const fin = (alg: string) => ({ alg, p: compose(alg), n: toMoves(alg).length })
 
   // Center inserts into the top: [setup of the source face] [top setup] slice, top, slice back (plus pure-commutator forms)
   const SLICES: [string, string][] = [['r', 'F'], ["l'", 'F'], ["r'", 'B'], ['l', 'B'], ['f', 'L'], ["b'", 'L'], ["f'", 'R'], ['b', 'R'], ['r2', 'D'], ['l2', 'D'], ['f2', 'D'], ['b2', 'D']]
-  const inserts: { lines: Line[]; p: number[] }[] = []
+  const inserts: { lines: Line[]; p: number[]; n: number }[] = []
   for (const [sl, src] of SLICES) for (const u of T) for (const pure of [false, true]) for (const a of ['', ...T.map(t => src + t)]) for (const v of ['', ...T.map(t => 'U' + t)]) {
     const ins = `${sl} U${u} ${inv(sl)}` + (pure ? ` ${inv('U' + u)}` : '')
     const lines: Line[] = []
     if (a) lines.push({ alg: a, note: `Turn the ${SRC_NOTE[src]} face so the piece lines up with the slice that will lift it.` })
     if (v) lines.push({ alg: v, note: 'Turn the top so a spot that still needs filling waits in that column.' })
     lines.push({ alg: ins, note: pure ? 'Lift it in, turn the top, slide back, and turn the top back: only three pieces move.' : 'Lift it in with the slice, turn the top, then slide the slice back.' })
-    inserts.push({ lines, p: compose([a, v, ins].filter(Boolean).join(' ')) })
+    const alg = [a, v, ins].filter(Boolean).join(' ')
+    inserts.push({ lines, p: compose(alg), n: toMoves(alg).length })
   }
   inserts.sort((x, y) => x.lines.length - y.lines.length)
   // Fallback: pure 3-cycles of center pieces that touch the top, [slice, face slice face'], found by trying them on a labelled cube
@@ -85,7 +87,7 @@ function makeKit(N: number) {
       if (moved.length !== 3 || !moved.every(isCenter) || !moved.some(i => i < A)) continue
       for (const v of ['', ...T.map(t => 'U' + t)]) comms.push({
         lines: [...(v ? [{ alg: v, note: 'Turn the top so the right spot lines up.' }] : []), { alg, note: 'This commutator swaps exactly three center pieces and leaves the rest of the cube alone.' }],
-        p: compose(`${v} ${alg}`),
+        p: compose(`${v} ${alg}`), n: toMoves(`${v} ${alg}`).length,
       })
     }
     return comms
@@ -94,12 +96,14 @@ function makeKit(N: number) {
   // Edge pairing: [whole-cube turn] [up to two outer setup turns] slice, flip, slice back
   const undo = (alg: string) => alg.split(' ').reverse().map(inv).join(' ')
   const FLIPS = ["R U R' F R' F' R", "L' U' L F' L F L'"].flatMap(f => [f, undo(f)])
-  const macros = ['u', "u'", 'd', "d'"].flatMap(sl => FLIPS.map(f => ({ alg: `${sl} ${f} ${inv(sl)}`, p: compose(`${sl} ${f} ${inv(sl)}`) })))
+  const macros = ['u', "u'", 'd', "d'"].flatMap(sl => FLIPS.map(f => fin(`${sl} ${f} ${inv(sl)}`)))
+  // Shorter pairing for intermediate and expert: slice, swap the joined edge out with three moves, slice back
+  const quick = ['u', "u'", 'd', "d'"].flatMap(sl => ['R', "R'", 'L', "L'"].flatMap(f => ['U', "U'", 'U2', 'D', "D'", 'D2'].map(g => fin(`${sl} ${f} ${g} ${inv(f)} ${inv(sl)}`))))
   // Last two edges: no free edge is left to flip in, so this one pairs both halves at the front in place
-  const L2E = ['d', "d'", 'u', "u'"].flatMap(sl => ["R F' U R' F", "L' F U' L F'"].flatMap(f => [f, undo(f)]).map(f => `${sl} ${f} ${inv(sl)}`)).map(alg => ({ alg, p: compose(alg) }))
+  const L2E = ['d', "d'", 'u', "u'"].flatMap(sl => ["R F' U R' F", "L' F U' L F'"].flatMap(f => [f, undo(f)]).map(f => fin(`${sl} ${f} ${inv(sl)}`)))
   const outer = 'URFDLB'.split('').flatMap(m => T.map(t => ({ alg: m + t, p: b.perm(m + t) })))
   // Fallback: pure 3-cycles of wing pieces, [slice, face face face'], found on a labelled cube
-  let wingComms: { alg: string; p: number[] }[] | null = null
+  let wingComms: ReturnType<typeof fin>[] | null = null
   const isWing = (i: number) => { const r = ((i % A) / N) | 0, c = i % N, m = (N - 1) / 2; return (r === 0 || r === N - 1) !== (c === 0 || c === N - 1) && r !== m && c !== m }
   const wings = () => {
     if (wingComms) return wingComms
@@ -109,33 +113,42 @@ function makeKit(N: number) {
       if (x[0] === y[0]) continue
       const alg = `${a} ${x} ${y} ${inv(x)} ${inv(a)} ${x} ${inv(y)} ${inv(x)}`
       const moved = b.move(ID, alg).flatMap((v, i) => (v !== String(i) ? [i] : []))
-      if (moved.length === 6 && moved.every(isWing)) wingComms.push({ alg, p: compose(alg) })
+      if (moved.length === 6 && moved.every(isWing)) wingComms.push(fin(alg))
     }
     return wingComms
   }
   const turns = ['', 'y', "y'", 'y2'].map(alg => ({ alg, p: compose(alg) }))
   // 5×5 edge parity: the front-top edge's two wings are swapped, which no 3-cycle can undo; this swaps exactly those two
-  const parity = N % 2 ? [{ alg: EDGE_PARITY, p: compose(EDGE_PARITY) }] : []
-  return { b, A, mid, centers, edges, inserts, commutators, macros, L2E, wings, parity, outer, turns, compose }
+  const parity = N % 2 ? [fin(EDGE_PARITY)] : []
+  const wingRefs = edges.flatMap(g => g.map(([a, c]) => [a, c, ...middleOf(g)])) // each wing with its edge's middle piece (5×5 progress)
+  return { b, A, mid, id: b.STICKERS.map((_, i) => i), centers, edges, wingRefs, inserts, commutators, macros, quick, L2E, wings, parity, outer, turns, compose }
 }
 
 type Kit = ReturnType<typeof makeKit>
-const centerCount = (k: Kit, s: State, f: number, col: string) => k.centers[f].filter(i => s[i] === col).length
-const centerDone = (k: Kit, s: State, f: number, col: string) => k.centers[f].every(i => s[i] === col)
-const allCenters = (k: Kit, s: State) => k.centers.every(c => c.every(i => s[i] === s[c[0]]))
-const pairedEdge = (s: State, g: number[][]) => g.every(([a, c]) => s[a] === s[g[0][0]] && s[c] === s[g[0][1]])
-const pairedCount = (k: Kit, s: State) => k.edges.filter(g => pairedEdge(s, g)).length
+// Checks read the cube through an optional permutation p, so a candidate move can be scored without building the turned cube
+const centerCount = (k: Kit, s: State, f: number, col: string, p = k.id) => k.centers[f].filter(i => s[p[i]] === col).length
+const centerDone = (k: Kit, s: State, f: number, col: string, p = k.id) => k.centers[f].every(i => s[p[i]] === col)
+const allCenters = (k: Kit, s: State, p = k.id) => k.centers.every(c => c.every(i => s[p[i]] === s[p[c[0]]]))
+const pairedEdge = (s: State, g: number[][], p?: number[]) => { const v = (i: number) => s[p ? p[i] : i]; return g.every(([a, c]) => v(a) === v(g[0][0]) && v(c) === v(g[0][1])) }
+const pairedCount = (k: Kit, s: State, p?: number[]) => k.edges.filter(g => pairedEdge(s, g, p)).length
 // Progress: whole edges on a 4×4; on a 5×5 each wing that matches its edge's fixed middle piece counts (24 in all)
 const middleOf = (g: number[][]) => g[(g.length - 1) >> 1]
-const progress = (k: Kit, s: State) => k.b.N % 2 ? k.edges.reduce((t, g) => t + g.filter(([a, c]) => s[a] === s[middleOf(g)[0]] && s[c] === s[middleOf(g)[1]]).length - 1, 0) : pairedCount(k, s)
+function progress(k: Kit, s: State, p = k.id) {
+  if (!(k.b.N % 2)) return pairedCount(k, s, p)
+  let t = -k.edges.length // the middle pieces match themselves
+  for (const [a, c, x, y] of k.wingRefs) if (s[p[a]] === s[p[x]] && s[p[c]] === s[p[y]]) t++ // the hot loop of edge pairing: kept flat
+  return t
+}
 const edgeName = (s: State, g: number[][]) => g[0].map(i => NAME[s[i]]).join('-')
 
 // Fill the top center with `col` while faces in `keep` (face index, color) stay finished
-function buildTop(k: Kit, s: State, col: string, keep: [number, string][]): [State, Line[]] {
+// fast (intermediate and expert): take the insert that places the most pieces per move, not the first that places one
+function buildTop(k: Kit, s: State, col: string, keep: [number, string][], fast: boolean): [State, Line[]] {
   const lines: Line[] = []
   for (let n; (n = centerCount(k, s, 0, col)) < k.centers[0].length;) {
-    const ok = (x: State) => centerCount(k, x, 0, col) > n && keep.every(([f, c]) => centerDone(k, x, f, c))
-    const hit = k.inserts.find(c => ok(ap(s, c.p))) ?? k.commutators().find(c => ok(ap(s, c.p)))
+    const gain = (p: number[]) => (keep.every(([f, c]) => centerDone(k, s, f, c, p)) ? centerCount(k, s, 0, col, p) - n : 0)
+    const best = (cs: typeof k.inserts) => cs.reduce<{ c?: (typeof cs)[0]; r: number }>((acc, c) => { const r = gain(c.p) / c.n; return r > acc.r ? { c, r } : acc }, { r: 0 }).c
+    const hit = fast ? best(k.inserts) ?? best(k.commutators()) : k.inserts.find(c => gain(c.p) > 0) ?? k.commutators().find(c => gain(c.p) > 0)
     if (!hit) throw new Error(IMPOSSIBLE)
     s = ap(s, hit.p)
     lines.push(...hit.lines)
@@ -144,26 +157,27 @@ function buildTop(k: Kit, s: State, col: string, keep: [number, string][]): [Sta
 }
 
 // Pair one more edge at a time; the slice-flip-slice keeps centers and finished edges intact
-function pairEdges(k: Kit, s: State): [State, Chunk[]] {
+// fast (intermediate and expert): also try the shorter slice-swap-slice, and keep the move with the most pairing per move
+function pairEdges(k: Kit, s: State, fast: boolean): [State, Chunk[]] {
   const chunks: Chunk[] = []
   const goal = k.b.N % 2 ? 24 : 12
   let parityDone = false
   for (let n; (n = progress(k, s)) < goal;) {
-    const hit: { best?: { s: State; algs: string[] } } = {} // a holder: the search below fills it
-    const len = (algs: string[]) => algs.reduce((t, a) => t + (a ? a.split(' ').length : 0), 0)
-    const macros = n >= goal - 4 ? [...k.macros, ...k.L2E] : k.macros
-    // [whole-cube turn] [setup turns, up to `max`] [finisher]; keep the shortest that pairs one more edge
-    const dfs = (x: State, setups: string[], max: number, turnAlg: string, finishers: { alg: string; p: number[] }[]) => {
+    const hit: { best?: { s: State; algs: string[]; r: number; n: number } } = {} // a holder: the search below fills it
+    const top = k.b.N % 2 ? 6 : 3 // the most one finisher can pair, to skip candidates that can't beat the best
+    const macros = [...k.macros, ...(n >= goal - 4 ? k.L2E : [])]
+    // [whole-cube turn] [setup turns, up to `max`] [finisher]; keep the shortest that pairs more (fast: the most pairing per move)
+    const dfs = (x: State, setups: string[], max: number, turnAlg: string, finishers: { alg: string; p: number[]; n: number }[]) => {
       for (const m of finishers) {
-        const algs = [turnAlg, setups.join(' '), m.alg]
-        if (hit.best && len(algs) >= len(hit.best.algs)) continue
-        const y = ap(x, m.p)
-        if (progress(k, y) > n && allCenters(k, y)) hit.best = { s: y, algs }
+        const l = setups.length + m.n, all = l + (turnAlg ? 1 : 0) // moves, and moves counting the whole-cube turn
+        if (hit.best && (fast ? top / l <= hit.best.r : all >= hit.best.n)) continue
+        const g = progress(k, x, m.p) - n
+        if (g > 0 && (!fast || g / l > (hit.best?.r ?? 0)) && allCenters(k, x, m.p)) hit.best = { s: ap(x, m.p), algs: [turnAlg, setups.join(' '), m.alg], r: g / l, n: all }
       }
       if (setups.length < max) for (const o of k.outer) if (o.alg[0] !== setups.at(-1)?.[0]) dfs(ap(x, o.p), [...setups, o.alg], max, turnAlg, finishers)
     }
     // Slice-flip-slice first (what people learn); a wing 3-cycle when it would only trade one pair for another
-    const steps: [number, { alg: string; p: number[] }[]][] = [[2, macros], [1, k.wings()], [3, macros], [2, k.wings()]]
+    const steps: [number, typeof macros][] = [[2, fast ? [...k.quick, ...macros] : macros], [1, k.wings()], [3, macros], [2, k.wings()]] // the short finishers only in the shallow search
     for (const [max, finishers] of steps) {
       for (const t of k.turns) dfs(ap(s, t.p), [], max, t.alg, finishers)
       if (hit.best) break
@@ -189,7 +203,7 @@ function pairEdges(k: Kit, s: State): [State, Chunk[]] {
     const [t, set, m] = best.algs, lines: Line[] = []
     if (t) lines.push({ alg: t, note: 'Turn the whole cube to bring the two halves to the front.' })
     if (set) lines.push({ alg: set, note: 'Line up the halves: one at the front left, its partner at the front right at the other height.' })
-    lines.push({ alg: m, note: m === EDGE_PARITY ? 'Edge parity: the two halves of this edge are swapped, which only happens on big cubes. This swaps them and touches nothing else.' : k.wings().some(w => w.alg === m) ? 'This commutator swaps exactly three edge halves and leaves everything else alone.' : 'Slice to join them, flip a fresh edge into the front right, then slice back to fix the centers.' })
+    lines.push({ alg: m, note: k.quick.some(q => q.alg === m) ? 'Slice to join them, swap the joined edge out with three moves, then slice back to fix the centers.' : m === EDGE_PARITY ? 'Edge parity: the two halves of this edge are swapped, which only happens on big cubes. This swaps them and touches nothing else.' : k.wings().some(w => w.alg === m) ? 'This commutator swaps exactly three edge halves and leaves everything else alone.' : 'Slice to join them, flip a fresh edge into the front right, then slice back to fix the centers.' })
     chunks.push({ title: `Pair the ${made[0] ?? 'next'} edge`, lines })
     s = best.s
   }
@@ -205,21 +219,25 @@ const PLL_PARITY = "r2 U2 r2 Uw2 r2 Uw2"
 
 // Solve a 4×4 or 5×5 by reduction; one list of chunks per stage of STAGES_BIG
 export function solveBig(start: State, N: number, level: Level = 'beginner'): Chunk[][] {
-  const k = kitOf(N), b = k.b, frame = bigCube(3)
-  let s = start, f3 = frame.SOLVED
+  const k = kitOf(N), b = k.b, frame = bigCube(3), fast = level !== 'beginner'
+  // Read colors in the white-down grip that fits the centers best, so a reduced cube that was only turned isn't rebuilt
+  const cells = N % 2 ? k.centers.map(c => [c[(c.length - 1) >> 1]]) : k.centers // a 5×5's fixed middle pieces decide its grip
+  const fit = (f: State) => cells.reduce((t, c, face) => t + c.filter(i => start[i] === f[face * 9 + 4]).length, 0)
+  const f0 = ['', 'y', 'y2', "y'"].map(y => frame.move(frame.SOLVED, y)).reduce((a, x) => (fit(x) > fit(a) ? x : a))
+  let s = start, f3 = f0
   const out: Chunk[][] = []
   const turn = (alg: string) => { s = b.move(s, alg); f3 = frame.move(f3, alg) }
   const color = (face: number) => f3[face * 9 + 4] // the color each face should get, tracked through whole-cube turns
   const centerStage = (lead: Line[], keepFaces: number[], extra: { rot: string; note: string }[]) => {
     const chunks: Chunk[] = []
     lead.forEach(l => turn(l.alg))
-    const [n0, lines0] = buildTop(k, s, color(0), keepFaces.map(f => [f, color(f)]))
+    const [n0, lines0] = buildTop(k, s, color(0), keepFaces.map(f => [f, color(f)]), fast)
     s = n0
     chunks.push({ title: `Build the ${NAME[color(0)]} center`, lines: [...lead, ...lines0] })
     for (const e of extra) {
       turn(e.rot)
       const keep = [1, 2, 3, 4, 5].filter(f => centerDone(k, s, f, color(f)) && f !== 2) // the front is never kept: inserts pass through it
-      const [n1, lines1] = buildTop(k, s, color(0), keep.map(f => [f, color(f)]))
+      const [n1, lines1] = buildTop(k, s, color(0), keep.map(f => [f, color(f)]), fast)
       s = n1
       chunks.push({ title: `Build the ${NAME[color(0)]} center`, lines: [{ alg: e.rot, note: e.note }, ...lines1] })
     }
@@ -232,15 +250,15 @@ export function solveBig(start: State, N: number, level: Level = 'beginner'): Ch
     { rot: 'x', note: 'Roll it forward again.' },
   ]))
   if (!allCenters(k, s)) throw new Error(IMPOSSIBLE)
-  // Back to the usual grip: yellow on top, green in front
-  const back = ['', 'x', "x'", 'x2', 'z', "z'", 'z2', 'y', "y'", 'y2'].flatMap(a => ['', 'y', "y'", 'y2'].map(c => `${a} ${c}`.trim()))
-    .find(r => { const t = frame.move(f3, r); return t[4] === 'y' && t[22] === 'g' })!
-  const [paired, edgeChunks] = pairEdges(k, b.move(s, back))
+  // Back to the starting grip (yellow on top; green in front for a painted cube), so steps that are done leave the grip as it was
+  const front = NAME[f0[22]].toLowerCase(), back = ['', 'x', "x'", 'x2', 'z', "z'", 'z2', 'y', "y'", 'y2'].flatMap(a => ['', 'y', "y'", 'y2'].map(c => `${a} ${c}`.trim()))
+    .find(r => { const t = frame.move(f3, r); return t[4] === f0[4] && t[22] === f0[22] })!
+  const [paired, edgeChunks] = pairEdges(k, b.move(s, back), fast)
   f3 = frame.move(f3, back); s = paired
-  if (back) edgeChunks.unshift({ title: 'Back to the usual grip', lines: [{ alg: back, note: 'Turn the whole cube so yellow is on top and green faces you.' }] })
-  // Pairing turns the whole cube around; the 3×3 part starts with green in front again
-  const green = ['', 'y', "y'", 'y2'].find(y => b.move(s, y)[2 * k.A + k.mid * N + k.mid] === 'g') ?? ''
-  if (green) { s = b.move(s, green); edgeChunks.push({ title: 'Back to the usual grip', lines: [{ alg: green, note: 'Turn the whole cube so green faces you again.' }] }) }
+  if (back) edgeChunks.unshift({ title: 'Back to the usual grip', lines: [{ alg: back, note: `Turn the whole cube so yellow is on top and ${front} faces you.` }] })
+  // Pairing turns the whole cube around; the 3×3 part starts in the starting grip again
+  const green = ['', 'y', "y'", 'y2'].find(y => b.move(s, y)[2 * k.A + k.mid * N + k.mid] === f0[22]) ?? ''
+  if (green) { s = b.move(s, green); edgeChunks.push({ title: 'Back to the usual grip', lines: [{ alg: green, note: `Turn the whole cube so ${front} faces you again.` }] }) }
   out.push(edgeChunks)
 
   // The 3×3 part on the reduced cube, the chosen level's way; a 4×4 can need an edge flip (OLL parity) or swap (PLL parity)
@@ -293,8 +311,10 @@ export function validateBig(s: State, N: number): string | null {
 }
 
 // Any size: plan a solve from painted colors (2×2 and 3×3 here; 4×4 and 5×5 by reduction)
-export const prepareAny = (cube: State, size: Size, level: Level = 'beginner') =>
-  size > 3 ? { start: cube, plan: solveBig(cube, size, level) } : level === 'beginner' ? prepare(cube, size) : planSmall(cube, size, level)
+// keep: a 2×2 stays in its own invisible frame, so hints for a step match the steps already done
+export const prepareAny = (cube: State, size: Size, level: Level = 'beginner', keep = false) =>
+  size > 3 ? { start: cube, plan: solveBig(cube, size, level) }
+  : level !== 'beginner' ? planSmall(cube, size, level, keep) : keep && size === 2 ? { start: cube, plan: solve(cube, 2) } : prepare(cube, size)
 export const validateAny = (s: State, size: Size) => (size > 3 ? validateBig(s, size) : validate(s, size))
 
 // --- Practice and the mistake detective for every size. Big cubes run these in the worker ---
@@ -302,67 +322,71 @@ export const validateAny = (s: State, size: Size) => (size > 3 ? validateBig(s, 
 const turnOf = (size: Size) => (size > 3 ? bigCube(size).move : move)
 const algs = (chunks: Chunk[]) => chunks.flatMap(ch => ch.lines.map(l => l.alg)).join(' ')
 
-// True once step k is done; big cubes check centers and edges, then their 3×3 steps on the reduced cube
-export function stageDoneAny(k: number, s: State, size: Size): boolean {
-  if (size <= 3) return stageDone(k, s, size)
+// True once step k (of the level's steps) is done; big cubes check centers and edges, then their 3×3 steps on the reduced cube
+export function stageDoneAny(k: number, s: State, size: Size, level: Level = 'beginner'): boolean {
+  const small = (j: number, x: State, n: Size) => (level === 'beginner' ? stageDone(j, x, n) : stageDoneInt(j, x, n))
+  if (size <= 3) return small(k, s, size)
   const kit = kitOf(size), full = (col: string) => kit.centers.some((c, f) => centerDone(kit, s, f, col))
   const edges = () => progress(kit, s) === (size % 2 ? 24 : 12)
   if (k === 0) return full('w')
   if (k === 1) return full('w') && full('y')
   if (k === 2) return allCenters(kit, s)
   if (k === 3) return allCenters(kit, s) && edges()
-  return allCenters(kit, s) && edges() && stageDone(k - BIG_LEAD, reduce(kit, s))
+  return allCenters(kit, s) && edges() && small(k - BIG_LEAD, reduce(kit, s), 3)
 }
 
-const pick = <T,>(xs: T[]) => xs[(Math.random() * xs.length) | 0]
 // Setup moves from a solved big cube to the start of step k: each mixes only what step k builds
-function bigSetup(k: number, N: number) {
+function bigSetup(k: number, N: number, level: Level) {
   const T3 = ['', "'", '2']
   if (k === 0) return bigScramble()
   if (k === 1) return Array.from({ length: 8 }, () => { const sl = pick(['r', "l'", "r'", 'l', 'f', "b'", "f'", 'b']); return `${sl} U${pick(T3)} ${inv(sl)} ${pick(['F', 'R', 'B', 'L'])}${pick(T3)}` }).join(' ') // slice, top, slice back: the bottom center never moves
   if (k === 2) return Array.from({ length: 10 }, () => `${pick(['u', 'd'])}${pick(T3)} ${pick(['F', 'R', 'B', 'L'])}${pick(T3)}`).join(' ') // top and bottom centers stay put
   if (k === 3) return Array.from({ length: 3 }, () => `${pick(kitOf(N).macros).alg} ${pick(['U', 'D', 'F', 'R'])}${pick(T3)}`).join(' ') // centers stay solved
-  return practiceSetup(k - BIG_LEAD).setup // the 3×3 steps use outer turns only, which keep a reduced cube reduced
+  return level === 'beginner' ? practiceSetup(k - BIG_LEAD).setup : setupInt(k - BIG_LEAD, 3) // the 3×3 steps use outer turns only, which keep a reduced cube reduced
 }
 
 // Each task returns plain data, so the same code runs here or in the worker
 export type Task =
   | { kind: 'plan'; cube: State; size: Size; level?: Level }
-  | { kind: 'challenge'; step: number; size: Size }
-  | { kind: 'setup'; step: number; size: Size }
-  | { kind: 'from'; cube: State; step: number; size: Size }
-  | { kind: 'chunks'; cube: State; step: number; size: Size }
+  | { kind: 'challenge'; step: number; size: Size; level?: Level }
+  | { kind: 'setup'; step: number; size: Size; level?: Level }
+  | { kind: 'from'; cube: State; step: number; size: Size; level?: Level }
+  | { kind: 'chunks'; cube: State; step: number; size: Size; level?: Level }
   | { kind: 'diagnose'; start: State; plan: Chunk[][]; pos: number; actual: State; size: Size }
 
 export function runTask(t: Task): unknown {
-  const size = t.size
-  if (t.kind === 'plan') return prepareAny(t.cube, size, t.level)
+  const size = t.size, level = ('level' in t && t.level) || 'beginner'
+  if (t.kind === 'plan') return prepareAny(t.cube, size, level)
+  const done = (k: number, s: State) => stageDoneAny(k, s, size, level), stepPlan = (s: State) => prepareAny(s, size, level, true).plan
   // A cube at the start of step k: scramble, run the guide's earlier steps, and use its move count for step k as par
   if (t.kind === 'challenge') for (;;) {
     const raw = size > 3 ? bigCube(size).move(bigCube(size).SOLVED, bigScramble()) : move(SOLVED, scramble())
-    const { start: s0, plan } = prepareAny(size === 2 ? cornersOnly(raw) : raw, size)
+    const { start: s0, plan } = prepareAny(size === 2 ? cornersOnly(raw) : raw, size, level)
     const start = plan.slice(0, t.step).reduce((s, p) => turnOf(size)(s, algs(p)), s0), par = toMoves(algs(plan[t.step])).length
-    if (par && !stageDoneAny(t.step, start, size)) return { start, par }
+    if (par && !done(t.step, start)) return { start, par }
   }
   if (t.kind === 'setup') {
-    if (size <= 3) return practiceSetup(t.step, size)
-    const b = bigCube(size)
-    for (let tries = 0; tries < 50; tries++) {
-      const setup = simplify(bigSetup(t.step, size)), start = b.move(b.SOLVED, setup)
-      if (stageDoneAny(t.step, start, size) || (t.step > 0 && !stageDoneAny(t.step - 1, start, size))) continue
-      const par = toMoves(algs(solveBig(start, size)[t.step])).length
+    if (size <= 3 && level === 'beginner') return practiceSetup(t.step, size)
+    const solved = size > 3 ? bigCube(size).SOLVED : size === 3 ? SOLVED : SOLVED2
+    for (let tries = 0; tries < 100; tries++) {
+      const setup = simplify(size > 3 ? bigSetup(t.step, size, level) : setupInt(t.step, size)), start = turnOf(size)(solved, setup)
+      if (done(t.step, start) || (t.step > 0 && !done(t.step - 1, start))) continue
+      const par = toMoves(algs(stepPlan(start)[t.step])).length
       if (par) return { setup, start, par }
     }
     throw new Error('No practice setup found')
   }
   if (t.kind === 'from') {
-    if (size === 3) return practiceFrom(t.cube, t.step)
-    const { start: s0, plan } = prepareAny(t.cube, size)
-    const setup = algs(plan.slice(0, t.step).flat()), start = turnOf(size)(s0, setup)
+    const { start: s0, plan } = prepareAny(t.cube, size, level)
+    const setup = simplify(algs(plan.slice(0, t.step).flat())), start = turnOf(size)(s0, setup)
     return { setup, start, par: toMoves(algs(plan[t.step])).length }
   }
   // Hints for the cube as it is now: the guide's moves for this step, or null when an earlier step came undone
-  if (t.kind === 'chunks') return t.step > 0 && !stageDoneAny(t.step - 1, t.cube, size) ? null : prepareAny(t.cube, size).plan[t.step]
+  if (t.kind === 'chunks') {
+    // Twisting corners (the beginner's last step) scrambles the lower layers on the way, so plan it from the cube as it is
+    if (level === 'beginner' && t.step === (size === 2 ? 2 : size === 3 ? 7 : 7 + BIG_LEAD)) try { return STEPS[7](size > 3 ? reduce(kitOf(size), t.cube) : t.cube)[1] } catch { return null }
+    return t.step > 0 && !done(t.step - 1, t.cube) ? null : stepPlan(t.cube)[t.step]
+  }
   // Mistake detective: big cubes compare in every grip, since nothing fixes which way the cube is held
   const { states } = timeline(t.start, t.plan, size)
   if (size <= 3) return diagnose(states, t.pos, t.actual, size)

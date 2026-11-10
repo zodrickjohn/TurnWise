@@ -5,7 +5,8 @@ import { bigCube } from '../cube/big.ts'
 import type { Chunk } from '../cube/solver.ts'
 import { stageDoneAny, validateAny, type Task } from '../cube/bigsolve.ts'
 import { ask } from '../cube/ask.ts'
-import { Confetti, CubeView, Icon, KIT, Mini, MovePad, Tiles, describe, faceColor, load, save, type Kit } from '../ui.tsx'
+import { Confetti, CubeView, Icon, LEVEL_NAME, Mini, MovePad, Tiles, describe, faceColor, kitFor, load, save, type Kit } from '../ui.tsx'
+import type { Level } from '../cube/methods.ts'
 import Scanner from './Scanner.tsx'
 import { Coach } from '../Coach.tsx'
 
@@ -13,6 +14,7 @@ type Mode = 'screen' | 'real'
 type Deal = { start: State; par: number }
 type Setup = Deal & { setup: string }
 const SIZES: Size[] = [2, 3, 4, 5]
+const METHODS: Level[] = ['beginner', 'intermediate'] // expert moves are computer-found, nothing to drill
 const turnFor = (size: Size) => (size > 3 ? bigCube(size).move : move)
 const colorsAlong = (size: Size, s: State, alg: string) => toMoves(alg).reduce<[State, string[]]>(([st, cs], m) => [turnFor(size)(st, m), [...cs, faceColor(st, m)]], [s, []])[1]
 const algsOf = (chunks: Chunk[]) => chunks.flatMap(c => c.lines.map(l => l.alg)).join(' ')
@@ -37,10 +39,16 @@ function Stars({ n }: { n: number }) {
 
 // Shared shell: header, size and mode switches and the step picker on the left, the mode's cube on the right
 // painted: a complete, valid cube of this size from the paint screen, offered as a starting point for real-cube practice
-export default function Practice({ painted, size, setSize }: { painted?: State; size: Size; setSize: (s: Size) => void }) {
-  const K = KIT[size], last = K.stages.length - 1, tag = size === 3 ? '' : String(size) // each size keeps its own progress
+type Props = { painted?: State; size: Size; setSize: (s: Size) => void }
+export default function Practice(props: Props) {
+  const [level, setLevel] = useState<Level>(() => (load<string>('practiceLevel', 'beginner') === 'intermediate' ? 'intermediate' : 'beginner'))
+  return <Drills key={level} {...props} level={level} setLevel={l => { save('practiceLevel', l); setLevel(l) }} />
+}
+
+function Drills({ painted, size, setSize, level, setLevel }: Props & { level: Level; setLevel: (l: Level) => void }) {
+  const K = kitFor(size, level), last = K.stages.length - 1, tag = (size === 3 ? '' : String(size)) + (level === 'beginner' ? '' : 'i') // each size and method keeps its own progress
   const [mode, setMode] = useState<Mode>(() => (load<string>('practiceMode', 'screen') === 'real' ? 'real' : 'screen'))
-  const [step, setStep] = useState(() => Math.min(last, Math.max(0, load('practiceStep' + tag, size === 3 ? 2 : 0))))
+  const [step, setStep] = useState(() => Math.min(last, Math.max(0, load('practiceStep' + tag, size === 3 && level === 'beginner' ? 2 : 0))))
   const [round, setRound] = useState(0) // bump to deal a fresh cube
   const [best, setBest] = useState<Record<number, number>>(() => load('practiceBest' + tag, {}))
   const [real, setReal] = useState<Record<number, boolean>>(() => load('practiceReal' + tag, {}))
@@ -58,6 +66,9 @@ export default function Practice({ painted, size, setSize }: { painted?: State; 
       <div className="practice-switches">
         <div className="mode-switch" role="radiogroup" aria-label="Cube size">
           {SIZES.map(n => <button key={n} role="radio" aria-checked={size === n} onClick={() => setSize(n)}>{n}×{n}</button>)}
+        </div>
+        <div className="mode-switch" role="radiogroup" aria-label="Method">
+          {METHODS.map(l => <button key={l} role="radio" aria-checked={level === l} onClick={() => setLevel(l)}>{LEVEL_NAME[l]}</button>)}
         </div>
         <div className="mode-switch" role="radiogroup" aria-label="Where to practice">
           {([['screen', 'On screen'], ['real', 'On my real cube']] as const).map(([m, label]) => (
@@ -81,14 +92,14 @@ export default function Practice({ painted, size, setSize }: { painted?: State; 
       </ol>
     </>
   )
-  const props = { step, top, again, next, size, K }
+  const props = { step, top, again, next, size, K, level }
   const key = `${mode}-${step}-${round}`
   return mode === 'screen'
     ? <OnScreen key={key} {...props} onStars={n => setBest(b => { const nb = { ...b, [step]: Math.max(b[step] ?? 0, n) }; save('practiceBest' + tag, nb); return nb })} />
     : <RealCube key={key} {...props} painted={painted} onVerified={() => setReal(r => { const nr = { ...r, [step]: true }; save('practiceReal' + tag, nr); return nr })} />
 }
 
-type ModeProps = { step: number; top: ReactNode; again: () => void; next?: () => void; size: Size; K: Kit }
+type ModeProps = { step: number; top: ReactNode; again: () => void; next?: () => void; size: Size; K: Kit; level: Level }
 
 // While the solver deals a cube: the shell stays, the panel says what's happening
 function Dealing({ top, step, K, size, error, again }: ModeProps & { error: string }) {
@@ -136,11 +147,11 @@ function Hints({ look, from, chunks, size, onNeed }: { look: string; from: State
 }
 
 function OnScreen(props: ModeProps & { onStars: (n: number) => void }) {
-  const [ch, err] = useAnswer<Deal>({ kind: 'challenge', step: props.step, size: props.size }, [])
+  const [ch, err] = useAnswer<Deal>({ kind: 'challenge', step: props.step, size: props.size, level: props.level }, [])
   return ch ? <OnScreenGame {...props} ch={ch} /> : <Dealing {...props} error={err} />
 }
 
-function OnScreenGame({ step, top, again, next, size, K, onStars, ch }: ModeProps & { onStars: (n: number) => void; ch: Deal }) {
+function OnScreenGame({ step, top, again, next, size, K, level, onStars, ch }: ModeProps & { onStars: (n: number) => void; ch: Deal }) {
   const cube = useRef<Cube3D>(null)
   const turnState = turnFor(size)
   const [seq, setSeq] = useState<string[]>([])
@@ -148,9 +159,9 @@ function OnScreenGame({ step, top, again, next, size, K, onStars, ch }: ModeProp
   const [need, setNeed] = useState(size <= 3) // big cubes only ask the guide when a hint needs it
   const [wantShow, setWantShow] = useState(false)
   const cur = useMemo(() => turnState(ch.start, seq.join(' ')), [seq])
-  const done = seq.length > 0 && stageDoneAny(step, cur, size)
+  const done = seq.length > 0 && stageDoneAny(step, cur, size, level)
   const stars = starsFor(seq.length, ch.par, helped)
-  const [chunks] = useAnswer<Chunk[] | null>(done || !need ? null : { kind: 'chunks', cube: cur, step, size }, [cur, need, done])
+  const [chunks] = useAnswer<Chunk[] | null>(done || !need ? null : { kind: 'chunks', cube: cur, step, size, level }, [cur, need, done])
   useEffect(() => { if (done) { cube.current?.spin(); onStars(stars) } }, [done])
 
   const turn = (m: string) => { if (done) return; setSeq(s => [...s, m]); cube.current?.play(m, 380) }
@@ -211,18 +222,18 @@ function OnScreenGame({ step, top, again, next, size, K, onStars, ch }: ModeProp
 }
 
 function RealCube(props: ModeProps & { painted?: State; onVerified: () => void }) {
-  const [deal, err] = useAnswer<Setup>({ kind: 'setup', step: props.step, size: props.size }, [])
+  const [deal, err] = useAnswer<Setup>({ kind: 'setup', step: props.step, size: props.size, level: props.level }, [])
   return deal ? <RealCubeGame {...props} deal={deal} /> : <Dealing {...props} error={err} />
 }
 
 // Real cube: follow short setup moves from a solved cube, solve the step in your hands, optionally check with the camera
-function RealCubeGame({ step, top, again, next, size, K, painted, onVerified, deal }: ModeProps & { painted?: State; onVerified: () => void; deal: Setup }) {
+function RealCubeGame({ step, top, again, next, size, K, level, painted, onVerified, deal }: ModeProps & { painted?: State; onVerified: () => void; deal: Setup }) {
   const cube = useRef<Cube3D>(null)
   const busy = useRef(false)
   const [ch, setCh] = useState({ ...deal, from: K.solved, scrambled: false })
   const setup = useMemo(() => toMoves(ch.setup), [ch])
   const setupColors = useMemo(() => colorsAlong(size, ch.from, ch.setup), [ch])
-  const [chunks] = useAnswer<Chunk[] | null>({ kind: 'chunks', cube: ch.start, step, size }, [ch])
+  const [chunks] = useAnswer<Chunk[] | null>({ kind: 'chunks', cube: ch.start, step, size, level }, [ch])
   const [i, setI] = useState(0)
   const [phase, setPhase] = useState<'setup' | 'solve' | 'won'>('setup')
   const [verified, setVerified] = useState(false)
@@ -237,7 +248,7 @@ function RealCubeGame({ step, top, again, next, size, K, painted, onVerified, de
     const problem = validateAny(cubeNow, size)
     if (problem) return setVerdict(problem)
     setVerdict('Planning the moves to this step…')
-    ask<Setup>({ kind: 'from', cube: cubeNow, step, size }).then(r => {
+    ask<Setup>({ kind: 'from', cube: cubeNow, step, size, level }).then(r => {
       if (!r.par) return setVerdict(`Your cube already has step ${step + 1} done. Pick a later step, or scramble it first.`)
       setCh({ ...r, from: cubeNow, scrambled: true })
       setI(0)
@@ -274,8 +285,8 @@ function RealCubeGame({ step, top, again, next, size, K, painted, onVerified, de
     if (why === 'source') return startFromScrambled(s)
     const problem = validateAny(s, size)
     if (problem) return setVerdict(problem)
-    if (stageDoneAny(step, s, size)) { setVerified(true); setPhase('won'); onVerified(); return }
-    setVerdict(step > 0 && !stageDoneAny(step - 1, s, size) ? `An earlier step came undone (step ${step}). Fix that first, then finish this one.` : `Not quite yet. The goal: ${K.stages[step].goal}`)
+    if (stageDoneAny(step, s, size, level)) { setVerified(true); setPhase('won'); onVerified(); return }
+    setVerdict(step > 0 && !stageDoneAny(step - 1, s, size, level) ? `An earlier step came undone (step ${step}). Fix that first, then finish this one.` : `Not quite yet. The goal: ${K.stages[step].goal}`)
   }
 
   const setupDone = i >= setup.length

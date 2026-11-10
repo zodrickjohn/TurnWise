@@ -15,7 +15,7 @@ const start = () => {
 }
 
 export function ask<T>(task: Task): Promise<T> {
-  if (task.size <= 3 && (task.kind !== 'plan' || (task.level ?? 'beginner') === 'beginner')) return Promise.resolve().then(() => runTask(task) as T)
+  if (task.size <= 3 && (!('level' in task) || (task.level ?? 'beginner') === 'beginner')) return Promise.resolve().then(() => runTask(task) as T)
   const id = ++seq
   return new Promise<T>((ok, fail) => {
     waiting.set(id, [ok as (v: unknown) => void, fail])

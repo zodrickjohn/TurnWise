@@ -192,7 +192,7 @@ export const LEVEL_NOTE: Record<Level, string> = {
 }
 export const LEVEL_MOVES: Record<Size, Record<Level, number>> = {
   2: { beginner: 80, intermediate: 26, expert: 9 }, 3: { beginner: 178, intermediate: 83, expert: 20 },
-  4: { beginner: 325, intermediate: 250, expert: 180 }, 5: { beginner: 500, intermediate: 420, expert: 365 },
+  4: { beginner: 325, intermediate: 160, expert: 105 }, 5: { beginner: 490, intermediate: 270, expert: 215 },
 }
 export const phaseOf = (step: number, phases = PHASES) => phases.findIndex(p => p.steps.includes(step))
 export const colorName = (c: string) => NAME[c] ?? 'blank'
