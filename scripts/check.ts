@@ -227,12 +227,31 @@ import { planSmall } from '../src/cube/methods.ts'
   console.log(`intermediate practice and hint-following ok (${((performance.now() - t0) / 1000).toFixed(1)}s)`)
 }
 
-// Patterns undo to solved
+// Patterns undo to solved; follow mode lights stickers that really end each part home
 import { PATTERNS } from '../src/cube/patterns.ts'
+import { arrivals, carry } from '../src/cube/follow.ts'
+import { prepareAny } from '../src/cube/bigsolve.ts'
 {
   for (const p of PATTERNS) {
     const s = move(SOLVED, p.alg)
     assert(!isSolved(s) && isSolved(move(s, toMoves(p.alg).reverse().map(invertMove).join(' '))), `${p.name} undoes`)
   }
-  console.log('patterns ok')
+  for (const [N, level] of [[3, 'beginner'], [3, 'intermediate'], [2, 'beginner'], [4, 'intermediate']] as const) {
+    const turn = N > 3 ? bigCube(N).move : move
+    const raw = N > 3 ? bigCube(N).move(bigCube(N).SOLVED, bigScramble(40)) : move(SOLVED, scramble())
+    const { start, plan } = prepareAny(N === 2 ? cornersOnly(raw) : raw, N, level)
+    const { moves, states } = timeline(start, plan, N), ms = moves.map(t => t.m)
+    let lit = 0
+    for (let a = 0; a < ms.length;) {
+      let b = a
+      while (b < ms.length && moves[b].stage === moves[a].stage && moves[b].chunk === moves[a].chunk) b++
+      const at = arrivals(turn, states, ms, a, b, N, N === 3 && level === 'beginner' && moves[a].stage === 0)
+      const end = carry(turn, at, states[0].length, ms.slice(a, b).join(' '))
+      assert(end.length === at.length && end.every(i => states[b][i] !== '_'), `${N}×${N} ${level}: lit stickers are carried, never lost`)
+      lit += +!!at.length
+      a = b
+    }
+    assert(lit > 0, `${N}×${N} ${level}: follow mode lights something`)
+  }
+  console.log('patterns and follow mode ok')
 }

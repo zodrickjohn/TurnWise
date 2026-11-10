@@ -2,13 +2,14 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
-import { BASE, FRAME, STICKERS, isCorner, move, type Face, type Size, type State } from './model.ts'
+import { BASE, FRAME, STICKERS, isCorner, move, toMoves, type Face, type Size, type State, type V } from './model.ts'
 import { bigCube, turnOf } from './big.ts'
 
 export const HEX: Record<string, string> = { w: '#f6f6f2', y: '#ffd60a', r: '#f0302a', o: '#ff8a00', g: '#00c46a', b: '#2f6bff', _: '#3a3f4b' }
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
 const expo = (t: number) => (t >= 1 ? 1 : 1 - 2 ** (-10 * t))
 const DIST = 11
+const AXES = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)]
 
 function roundedSquare(h: number, r: number) {
   const s = new THREE.Shape()
@@ -43,6 +44,11 @@ export class Cube3D {
   private host: HTMLElement
   private size: Size = 3
   private turn: (s: State, m: string) => State = move
+  private layout = STICKERS
+  private gap = 1
+  private lit: boolean[] | null = null // follow mode: only these stickers keep full color
+  private dims = Object.fromEntries(Object.entries(HEX).map(([k, c]) => [k, new THREE.MeshStandardMaterial({ color: new THREE.Color(c).lerp(new THREE.Color('#1d2027'), 0.86), roughness: 0.6 })]))
+  private trails = new THREE.Group()
 
   constructor(host: HTMLElement, state: State, interactive = true, followPointer = false, size: Size = 3) {
     this.host = host
@@ -65,9 +71,10 @@ export class Cube3D {
     const byPos = new Map<string, THREE.Mesh>()
     // A 2x2 is the 8 corner cubies pulled in to touch; 4x4 and 5x5 come from the N×N model in doubled coordinates
     const big = size > 3 ? bigCube(size) : null
-    if (big) this.turn = big.move
-    const gap = size === 3 ? 1 : 0.5
-    ;(big ? big.STICKERS : STICKERS).forEach(({ pos, normal }, i) => {
+    if (big) (this.turn = big.move), (this.layout = big.STICKERS)
+    const gap = (this.gap = size === 3 ? 1 : 0.5)
+    this.group.add(this.trails)
+    this.layout.forEach(({ pos, normal }, i) => {
       if (size === 2 && !isCorner(i)) return
       let c = byPos.get(pos.join())
       if (!c) {
@@ -140,24 +147,67 @@ export class Cube3D {
 
   setState(s: State) {
     this.state = s
-    this.stickers.forEach((m, i) => (m.material = this.mats[s[i]] ?? this.mats._))
+    this.stickers.forEach((m, i) => (m.material = (this.lit && !this.lit[i] ? this.dims : this.mats)[s[i]] ?? this.mats._))
+  }
+
+  // Which cubies a move turns, about which axis and how far: the 3x3 table, or the N×N notation (slices, wide turns, x y z)
+  private spec(m: string) {
+    const t = this.size > 3 ? turnOf(this.size, m) : null
+    const [axis, layer, sin] = t ? [t.axis, null, t.sine] : BASE[m[0]]
+    const amount = t ? (t.amount === 3 ? -1 : t.amount) : m.endsWith('2') ? 2 : m.endsWith("'") ? -1 : 1
+    const has = (p: V) => (t ? t.layers.includes(p[axis]) : layer === null || p[axis] === layer)
+    return { axis, layer, has, angle: (sin * amount * Math.PI) / 2, quarters: Math.abs(amount) }
+  }
+
+  // Follow mode: light only the stickers at these positions (null = all) and draw the path each piece takes through alg.
+  // Paths arc out a little mid-turn, so the turning layer's corners don't hide them
+  follow(at: number[] | null, alg = '') {
+    this.lit = at && this.stickers.map((_, i) => at.includes(i))
+    this.setState(this.state)
+    this.trails.children.forEach(o => { (o as THREE.Mesh).geometry.dispose(); ((o as THREE.Mesh).material as THREE.Material).dispose() })
+    this.trails.clear()
+    // One path per piece, from its cubie pushed out past the stickers; the outline keeps it readable on any color
+    const pieces = new Map<string, number>()
+    for (const j of at ?? []) if (!pieces.has(this.layout[j].pos.join())) pieces.set(this.layout[j].pos.join(), j)
+    for (const j of pieces.values()) {
+      const c = new THREE.Vector3(...this.layout[j].pos).multiplyScalar(this.gap)
+      const p = c.clone().addScaledVector(c.lengthSq() ? c.clone().normalize() : new THREE.Vector3(...this.layout[j].normal), 0.75)
+      const pts = [p.clone()]
+      let k = j
+      for (const m of toMoves(alg)) {
+        if (/^[xyz]/.test(m)) break // turning the whole cube moves no piece: the path picks up again after it
+        const { axis, has, angle, quarters } = this.spec(m)
+        if (has(this.layout[k].pos)) {
+          const ax = AXES[axis], q = angle / quarters
+          for (let n = 0; n < quarters; n++) for (let t = 1; t <= 10; t++) {
+            const r = p.clone().applyAxisAngle(ax, q * (n + t / 10)), along = ax.clone().multiplyScalar(r.dot(ax))
+            pts.push(r.sub(along).multiplyScalar(1 + 0.3 * Math.sin((Math.PI * t) / 10)).add(along))
+          }
+          p.applyAxisAngle(ax, angle)
+        }
+        k = this.turn(this.state.map((_, i) => (i === k ? '1' : '0')), m).indexOf('1')
+      }
+      if (pts.length < 2) continue
+      const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal'), seg = pts.length * 3
+      // The black copy shows only its back faces, so it reads as an outline around the colored fill
+      const ink = new THREE.MeshBasicMaterial({ color: '#000', side: THREE.BackSide }), fill = new THREE.MeshBasicMaterial({ color: HEX[this.state[j]] ?? HEX._ })
+      const dot = (r: number, m: THREE.Material) => { const d = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), m); d.position.copy(pts.at(-1)!); return d }
+      this.trails.add(new THREE.Mesh(new THREE.TubeGeometry(curve, seg, 0.075, 8), ink), new THREE.Mesh(new THREE.TubeGeometry(curve, seg, 0.045, 8), fill), dot(0.17, ink.clone()), dot(0.13, fill.clone()))
+    }
   }
 
   // Animate one move (queued); ms = 0 applies it instantly
   play(m: string, ms = 520) {
     return (this.queue = this.queue.then(() => new Promise<void>(done => {
       const next = this.turn(this.state, m)
+      if (this.lit) this.lit = this.turn(this.lit.map(b => (b ? '1' : '0')), m).map(c => c === '1') // lit stickers travel with their pieces
       if (!ms) return done(this.setState(next))
-      // Which cubies turn, about which axis and how far: the 3x3 table, or the N×N notation (slices, wide turns, x y z)
-      const t = this.size > 3 ? turnOf(this.size, m) : null
-      const [axis, layer, sin] = t ? [t.axis, null, t.sine] : BASE[m[0]]
-      const amount = t ? (t.amount === 3 ? -1 : t.amount) : m.endsWith('2') ? 2 : m.endsWith("'") ? -1 : 1
+      const { axis, layer, has, angle, quarters } = this.spec(m)
       const pivot = new THREE.Group()
       this.group.add(pivot)
-      const layerCubies = this.cubies.filter(c => (t ? t.layers.includes(c.userData.home[axis]) : layer === null || c.userData.home[axis] === layer))
+      const layerCubies = this.cubies.filter(c => has(c.userData.home))
       layerCubies.forEach(c => pivot.attach(c))
-      const angle = (sin * amount * Math.PI) / 2
-      const dur = ms * (amount === 2 ? 1.4 : 1)
+      const dur = ms * (quarters === 2 ? 1.4 : 1)
       const t0 = performance.now()
       const lift = layer === null ? 0 : layer * 0.09
       this.tween = now => {
@@ -197,6 +247,7 @@ export class Cube3D {
     this.controls?.dispose()
     this.scene.traverse(o => { if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose() } })
     Object.values(this.mats).forEach(m => m.dispose())
+    Object.values(this.dims).forEach(m => m.dispose())
     this.renderer.dispose()
     this.renderer.domElement.remove()
   }

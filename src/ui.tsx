@@ -229,9 +229,10 @@ const ICONS: Record<string, string> = {
   bulb: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z',
   search: 'M10.5 17a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13zM15.5 15.5L20 20',
   download: 'M12 4v11M7 10.5l5 5 5-5M5 19.5h14',
+  eye: 'M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
 }
 export function Icon({ name, size = 22, className }: { name: keyof typeof ICONS | string; size?: number; className?: string }) {
-  const stroke = ['check', 'arrow', 'reset', 'close', 'camera', 'sun', 'moon', 'undo', 'bulb', 'search', 'download'].includes(name)
+  const stroke = ['check', 'arrow', 'reset', 'close', 'camera', 'sun', 'moon', 'undo', 'bulb', 'search', 'download', 'eye'].includes(name)
   return (
     <svg className={className} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" fill={stroke ? 'none' : 'currentColor'} stroke={stroke ? 'currentColor' : 'none'} strokeWidth={stroke ? 2.6 : 0} strokeLinecap="round" strokeLinejoin="round">
       <path d={ICONS[name]} />

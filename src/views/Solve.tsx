@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Cube3D } from '../cube/Cube3D.ts'
 import { invertMove, move, toMoves, type State } from '../cube/model.ts'
-import { timeline } from '../cube/solver.ts'
+import { timeline, type TimedMove } from '../cube/solver.ts'
 import { bigCube } from '../cube/big.ts'
 import { Confetti, CubeView, Icon, LEVEL_MOVES, LEVEL_NAME, Mini, Tiles, describe, faceColor, kitFor, load, phaseOf, save, toTop } from '../ui.tsx'
 import { LEVELS, type Level } from '../cube/methods.ts'
 import type { Puzzle } from '../App.tsx'
 import { Coach } from '../Coach.tsx'
 import { stickerBurst } from '../cubie.ts'
+import { arrivals, carry } from '../cube/follow.ts'
 
 const SPEEDS: [string, number][] = [['Slow', 950], ['Normal', 600], ['Fast', 320]]
 export type Fix = { at: number; wrong: string }
@@ -39,6 +40,25 @@ export default function Solve({ puzzle: { start, plan, size, level }, again, pra
     return { moves, states, lineStart, colors: moves.map((t, k) => faceColor(states[k], t.m)) }
   }, [plan, start])
   const at = Math.min(resumed, moves.length)
+  // Follow the pieces: light the stickers the current part brings home and draw where they travel until they get there
+  const [follow, setFollow] = useState(() => load('follow', false))
+  useEffect(() => { save('follow', follow) }, [follow])
+  const part = moves[pos] && `${moves[pos].stage}.${moves[pos].chunk}`
+  const lit = useMemo(() => {
+    if (!follow || !part) return null
+    // The whole part first; a long part (a big cube's center) falls back to the line being played
+    const t = moves[pos], ms = moves.map(x => x.m), daisy = size === 3 && level === 'beginner' && t.stage === 0
+    for (const same of [(x: TimedMove) => x.stage === t.stage && x.chunk === t.chunk, (x: TimedMove) => x.stage === t.stage && x.chunk === t.chunk && x.line === t.line]) {
+      const a = moves.findIndex(same), b = moves.findLastIndex(same) + 1, at = arrivals(turnState, states, ms, a, b, size, daisy)
+      if (at.length) return { a, b, at }
+    }
+    return { a: pos, b: pos, at: [] }
+  }, [follow, part, follow && moves[pos]?.line])
+  useEffect(() => {
+    if (!lit || pending) return void cube.current?.follow(null)
+    const rest = moves.slice(pos, lit.b).map(x => x.m).join(' ')
+    cube.current?.follow(lit.at.length ? carry(turnState, lit.at, states[0].length, moves.slice(lit.a, pos).map(x => x.m).join(' ')) : null, rest)
+  }, [lit, pos, pending])
   useEffect(() => { save('pos', { key, pos }) }, [pos])
   const span = (k: number) => [moves.findIndex(t => t.stage === k), moves.findLastIndex(t => t.stage === k) + 1]
 
@@ -96,9 +116,11 @@ export default function Solve({ puzzle: { start, plan, size, level }, again, pra
     cheerTimer.current = window.setTimeout(() => setCleared(-1), 2600)
   }
 
-  const jump = (p: number) => {
-    if (busy.current || pending) return
+  // A jump while a line plays stops it and lands once the turn in flight is done
+  const jump = async (p: number) => {
+    if (pending) return
     playingRef.current = false
+    while (busy.current) await new Promise(r => setTimeout(r, 30))
     posRef.current = p
     setPos(p)
     cube.current?.setState(states[p])
@@ -119,6 +141,12 @@ export default function Solve({ puzzle: { start, plan, size, level }, again, pra
   // Speed and the slip check: inside the cube panel on wide screens, in the scrolling page on phones (CSS shows one)
   const extras = (
     <>
+      <div className="follow">
+        <button className="follow-toggle" aria-pressed={follow} onClick={() => setFollow(!follow)}>
+          <Icon name="eye" size={18} /> Follow the pieces
+        </button>
+        {follow && !done && <p className="follow-note">{lit?.at.length ? 'Bright pieces are heading home. Lines show the way they go.' : 'Too many pieces move here to follow one.'}</p>}
+      </div>
       <div className="speed" role="radiogroup" aria-label="Animation speed">
         {SPEEDS.map(([label, ms]) => <button key={label} role="radio" aria-checked={speed === ms} onClick={() => setSpeed(ms)}>{label}</button>)}
         <span className="keys"><kbd className="key">←</kbd> <kbd className="key">→</kbd> step, <kbd className="key">space</kbd> plays</span>

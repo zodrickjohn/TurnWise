@@ -507,6 +507,11 @@ button.big-st:active { transform: scale(0.88); }
 /* Mistake recovery */
 .mismatch { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 18px 16px; padding: 10px; border: 2.5px dashed color-mix(in srgb, var(--ink) 45%, transparent); border-radius: 12px; background: none; font-weight: 700; transition: background 0.2s, border-color 0.2s; }
 .mismatch:hover { border-style: solid; border-color: var(--ink); background: var(--tint); }
+.follow { display: flex; align-items: center; gap: 12px; margin: 0 18px 10px; }
+.follow-toggle { display: flex; flex: none; align-items: center; gap: 8px; padding: 8px 14px; border: var(--line); border-radius: 999px; background: var(--card); color: var(--ink); font-weight: 700; transition: transform 0.15s var(--ease), box-shadow 0.15s var(--ease), background 0.15s; }
+.follow-toggle:hover { transform: translate(calc(-2px * var(--lx)), -2px); box-shadow: var(--sh-sm); }
+.follow-toggle[aria-pressed='true'] { background: var(--y); color: #000; --ink: #000; box-shadow: var(--sh-sm); }
+.follow-note { margin: 0; font-size: 0.88rem; line-height: 1.35; color: var(--ink-2); }
 .repair-head { position: relative; padding: 22px 22px 18px; background: var(--tint); border: var(--line); border-radius: var(--rad); box-shadow: var(--sh); justify-items: start; }
 .detective { display: grid; place-items: center; width: 58px; height: 58px; border: var(--line); border-radius: 50%; background: var(--y); color: #000; box-shadow: var(--sh-sm); animation: sniff 2.4s var(--ease) infinite; }
 @keyframes sniff { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-14deg) translateX(-3px); } 40% { transform: rotate(10deg) translateX(3px); } 60% { transform: rotate(0); } }
@@ -617,10 +622,11 @@ button.big-st:active { transform: scale(0.88); }
   .pattern b { font-size: 0.95rem; }
   .patterns .transport .play { min-width: 0; }
   .solve .play-text { display: none; }
-  .solve .stage-card :is(.speed, .mismatch) { display: none; }
+  .solve .stage-card :is(.speed, .mismatch, .follow) { display: none; }
   .stage-extras { display: grid; gap: 10px; justify-items: start; }
   .stage-extras .speed { padding: 0; justify-content: flex-start; }
   .stage-extras .mismatch { margin: 0; width: 100%; }
+  .stage-extras .follow { margin: 0; }
   .hero-coach .coach-cubie { width: 80px !important; height: 83px !important; }
   .keys { display: none; }
   .explain { grid-template-columns: 1fr; }
