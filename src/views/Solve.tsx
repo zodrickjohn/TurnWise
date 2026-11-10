@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Cube3D } from '../cube/Cube3D.ts'
-import { cornersOnly, invertMove, move, toMoves, type State } from '../cube/model.ts'
+import { FACES, cornersOnly, invertMove, move, toMoves, type Face, type State } from '../cube/model.ts'
 import { timeline, type TimedMove } from '../cube/solver.ts'
 import { bigCube } from '../cube/big.ts'
 import { Confetti, CubeView, Icon, LEVEL_MOVES, LEVEL_NAME, Mini, Tiles, describe, faceColor, kitFor, load, phaseOf, save, toTop } from '../ui.tsx'
@@ -10,6 +10,7 @@ import { Coach } from '../Coach.tsx'
 import { stickerBurst } from '../cubie.ts'
 import { arrivals, carry } from '../cube/follow.ts'
 import { canRecord, recordSolve, saveFile } from '../video.ts'
+import Scanner from './Scanner.tsx'
 
 const SPEEDS: [string, number][] = [['Slow', 950], ['Normal', 600], ['Fast', 320]]
 export type Fix = { at: number; wrong: string }
@@ -153,6 +154,13 @@ export default function Solve({ puzzle: { start, plan, size, level }, again, pra
       .then(file => setVideo({ file }), () => setVideo({ error: true }))
   }
 
+  // Camera step check: one face, the one the latest step was about, compared with the screen
+  const [checking, setChecking] = useState(false)
+  const artView = (STEP_ART[moves[pos - 1]?.stage ?? stage] ?? STEP_ART[0]).view
+  const checkFace: Face = artView === 'Top' ? 'U' : artView === 'Bottom' ? 'D' : 'F'
+  const per = size === 2 ? 9 : size * size, f0 = FACES.indexOf(checkFace) * per
+  const expect = states[pos].slice(f0, f0 + per).filter((_, i) => size !== 2 || [0, 2, 6, 8].includes(i))
+
   // Speed and the slip check: inside the cube panel on wide screens, in the scrolling page on phones (CSS shows one)
   const extras = (
     <>
@@ -166,6 +174,11 @@ export default function Solve({ puzzle: { start, plan, size, level }, again, pra
         {SPEEDS.map(([label, ms]) => <button key={label} role="radio" aria-checked={speed === ms} onClick={() => setSpeed(ms)}>{label}</button>)}
         <span className="keys"><kbd className="key">←</kbd> <kbd className="key">→</kbd> step, <kbd className="key">space</kbd> plays</span>
       </div>
+      {!done && pos > 0 && !pending && (
+        <button className="mismatch" onClick={() => setChecking(true)}>
+          <Icon name="camera" size={18} /> Check my cube with the camera
+        </button>
+      )}
       {!done && (
         <button className="mismatch" onClick={() => onMismatch(states[pos], pos)}>
           <Icon name="search" size={18} /> My cube doesn't match the screen
@@ -177,6 +190,7 @@ export default function Solve({ puzzle: { start, plan, size, level }, again, pra
   const phase = PHASES[phaseOf(stage, PHASES)]
   return (
     <div className={'solve-wrap tone-' + phase.tone}>
+      {checking && <Scanner start={checkFace} size={size} onClose={() => setChecking(false)} check={{ face: checkFace, expect, onWrong: () => onMismatch(states[pos], pos) }} />}
       <nav className="rail" aria-label="Solve progress">
         {STAGES.map((s, k) => {
           const [a, b] = span(k)

@@ -120,6 +120,11 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 24px 64px; }
 .mini { --m: 12px; display: inline-grid; grid-template-columns: repeat(var(--n, 3), calc(var(--m) * 3 / var(--n, 3))); gap: 2px; padding: 3px; background: var(--solid); border-radius: 6px; flex: none; }
 .mini i { width: var(--m); height: var(--m); border-radius: 2px; }
 .mini i.c-_ { background: #555b67; }
+.mini i.off { outline: 3px solid var(--r); outline-offset: 1px; position: relative; z-index: 1; }
+.check-faces { justify-self: stretch; display: flex; justify-content: center; gap: 36px; margin: 6px 0 14px; }
+.check-faces figure { margin: 0; display: grid; justify-items: center; gap: 8px; font-weight: 700; }
+.check-faces .mini { --m: 30px; gap: 4px; padding: 6px; border-radius: 10px; }
+.check-faces .mini i { border-radius: 4px; }
 .mini i.q { background: repeating-linear-gradient(45deg, var(--y) 0 3px, #b9bec9 3px 6px); }
 
 /* Header */

@@ -34,7 +34,7 @@ export function average(data: Uint8ClampedArray): RGB {
   return sum.map(v => Math.round(v / n)) as RGB
 }
 
-const dist = (p: RGB, q: RGB) => { const [L, A, B] = lab(p), [l, a, b] = lab(q); return ((L - l) * 0.5) ** 2 + (A - a) ** 2 + (B - b) ** 2 }
+export const dist = (p: RGB, q: RGB) => { const [L, A, B] = lab(p), [l, a, b] = lab(q); return ((L - l) * 0.5) ** 2 + (A - a) ** 2 + (B - b) ** 2 }
 
 // Classify many stickers at once and learn the lighting: each color's reference moves to the mean of its stickers.
 // fixed: labels already known (a fixed center). cap: no color takes more stickers than a real cube has (N² each)

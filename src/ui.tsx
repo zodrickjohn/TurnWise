@@ -111,10 +111,11 @@ export function Tiles({ alg, colors, at = -1, done = -1, size = '' }: { alg: str
 }
 
 // Tiny 3x3 face diagram: color letters, '_' = any/unsolved, '?' = right place but maybe twisted
-export function Mini({ pattern, label }: { pattern: string; label: string }) {
+// off: cells to mark as different
+export function Mini({ pattern, label, off }: { pattern: string; label: string; off?: number[] }) {
   return (
     <span className="mini" role="img" aria-label={label} style={{ '--n': Math.sqrt(pattern.length) } as CSSProperties}>
-      {[...pattern].map((c, i) => <i key={i} className={c === '?' ? 'q' : 'c-' + c} style={{ '--k': i } as CSSProperties} />)}
+      {[...pattern].map((c, i) => <i key={i} className={(c === '?' ? 'q' : 'c-' + c) + (off?.includes(i) ? ' off' : '')} style={{ '--k': i } as CSSProperties} />)}
     </span>
   )
 }
