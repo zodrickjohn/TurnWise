@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Cube3D } from '../cube/Cube3D.ts'
-import { invertMove, move, toMoves, type State } from '../cube/model.ts'
+import { cornersOnly, invertMove, move, toMoves, type State } from '../cube/model.ts'
 import { timeline, type TimedMove } from '../cube/solver.ts'
 import { bigCube } from '../cube/big.ts'
 import { Confetti, CubeView, Icon, LEVEL_MOVES, LEVEL_NAME, Mini, Tiles, describe, faceColor, kitFor, load, phaseOf, save, toTop } from '../ui.tsx'
@@ -9,6 +9,7 @@ import type { Puzzle } from '../App.tsx'
 import { Coach } from '../Coach.tsx'
 import { stickerBurst } from '../cubie.ts'
 import { arrivals, carry } from '../cube/follow.ts'
+import { canRecord, recordSolve, saveFile } from '../video.ts'
 
 const SPEEDS: [string, number][] = [['Slow', 950], ['Normal', 600], ['Fast', 320]]
 export type Fix = { at: number; wrong: string }
@@ -138,6 +139,20 @@ export default function Solve({ puzzle: { start, plan, size, level }, again, pra
   })
   useEffect(() => { done ? toTop() : document.querySelector('.line.current')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [pos])
 
+  // Share: a link that opens this same cube; or a video of the whole solve, recorded offscreen in about 20 seconds
+  const [shared, setShared] = useState('')
+  const share = async () => {
+    const url = location.origin + location.pathname + '?' + new URLSearchParams({ n: String(size), m: level, cube: (size === 2 ? cornersOnly(start) : start).join('') }) + '#/solve'
+    if (navigator.share) return navigator.share({ title: 'Turnwise', text: 'Can you solve this cube? Turnwise shows every move.', url }).catch(() => {})
+    navigator.clipboard.writeText(url).then(() => setShared('Link copied'), () => setShared("Couldn't copy the link"))
+  }
+  const [video, setVideo] = useState<{ f?: number; file?: File; error?: boolean }>({})
+  const record = () => {
+    setVideo({ f: 0 })
+    recordSolve({ start, size, title: `${size}×${size} ${LEVEL_NAME[level].toLowerCase()}`, face: k => colors[k], moves: moves.map(t => ({ m: t.m, step: `Step ${t.stage + 1}: ${STAGES[t.stage].title}` })) }, f => setVideo({ f }))
+      .then(file => setVideo({ file }), () => setVideo({ error: true }))
+  }
+
   // Speed and the slip check: inside the cube panel on wide screens, in the scrolling page on phones (CSS shows one)
   const extras = (
     <>
@@ -176,13 +191,21 @@ export default function Solve({ puzzle: { start, plan, size, level }, again, pra
         })}
       </nav>
 
-      <div className="method-bar" role="radiogroup" aria-label="Method">
-        <span>Method</span>
-        {LEVELS.map(l => (
-          <button key={l} role="radio" aria-checked={l === level} disabled={!!replanning} onClick={() => switchTo(l)} title={`About ${LEVEL_MOVES[size][l]} moves`}>
-            {replanning === l ? 'Planning…' : LEVEL_NAME[l]}
-          </button>
-        ))}
+      <div className="solve-tools">
+        <div className="method-bar" role="radiogroup" aria-label="Method">
+          <span>Method</span>
+          {LEVELS.map(l => (
+            <button key={l} role="radio" aria-checked={l === level} disabled={!!replanning} onClick={() => switchTo(l)} title={`About ${LEVEL_MOVES[size][l]} moves`}>
+              {replanning === l ? 'Planning…' : LEVEL_NAME[l]}
+            </button>
+          ))}
+        </div>
+        <div className="share-tools">
+          <button onClick={share}><Icon name="share" size={16} /> Share this cube</button>
+          {canRecord && (video.file ? <button className="ready" onClick={() => saveFile(video.file!)}><Icon name="download" size={16} /> Save the video</button>
+            : <button onClick={record} disabled={video.f !== undefined}><Icon name="video" size={16} /> {video.f !== undefined ? `Recording ${Math.round(video.f * 100)}%` : video.error ? 'Try the video again' : 'Make a video'}</button>)}
+          {shared && <span role="status">{shared}</span>}
+        </div>
       </div>
 
       <div className="split solve">

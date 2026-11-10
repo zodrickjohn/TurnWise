@@ -31,6 +31,10 @@ const isCube = (s: unknown, size: Size): s is State => Array.isArray(s) && s.len
 const PAINT_KEY = (n: Size) => (n === 3 ? 'paint' : 'paint' + n)
 
 const levelOf = (v: unknown): Level => (LEVELS.includes(v as Level) ? (v as Level) : 'beginner')
+// A shared link (?n=3&m=beginner&cube=…#/solve) carries a cube to solve; a link that isn't a real cube is ignored
+const q = new URLSearchParams(location.search), sharedSize = sizeOf(Number(q.get('n'))), sharedCube = q.get('cube')?.split('')
+const shared = sharedCube && isCube(sharedCube, sharedSize) && !validateAny(sharedCube, sharedSize) ? { cube: sharedCube, size: sharedSize, level: levelOf(q.get('m')) } : null
+if (q.has('cube')) history.replaceState(null, '', location.pathname + (shared ? '' : location.hash))
 // Rebuild a saved puzzle only if it is still a valid cube; plans that take time to make (big cubes, other levels) are kept as saved
 function restorePuzzle(): Puzzle | null {
   const start = load<unknown>('start', null), size = sizeOf(load('startSize', 3)), level = levelOf(load('startLevel', 'beginner')), plan = load<Chunk[][] | null>('plan', null)
@@ -55,6 +59,7 @@ export default function App() {
   const setPaintOf = (n: Size) => (u: State | ((p: State) => State)) => setPaints(all => ({ ...all, [n]: typeof u === 'function' ? u(all[n]) : u }))
   const [puzzle, setPuzzle] = useState<Puzzle | null>(restorePuzzle)
   const [view, setView] = useState<View>(() => { const v = fromHash(); return v === 'solve' && !puzzle ? 'home' : v }) // a refresh keeps the page
+  const [opening, setOpening] = useState(!!shared)
   const [visited, setVisited] = useState<Set<View>>(() => new Set(load<View[]>('visited', [])))
   const [repair, setRepair] = useState<number | null>(null) // solve position being checked against the real cube
   const [fix, setFix] = useState<Fix>()
@@ -147,6 +152,10 @@ export default function App() {
   // The same cube taught another way, from the solve screen
   const replan = (l: Level) => puzzle && plan(puzzle.start, puzzle.size, l).then(p => { setLevel(l); openSolve(p) })
 
+  useEffect(() => {
+    if (shared) plan(shared.cube, shared.size, shared.level).then(p => { setSize(shared.size); setLevel(shared.level); openSolve(p, undefined, 'Someone shared this cube with you. Paint the same colors on your own cube, or just follow along on screen.') }).finally(() => setOpening(false))
+  }, [])
+
   // Paint screen submit: a new cube, or the real cube checked against the solve in progress
   const submit = async (actual: State) => {
     if (repair === null || !puzzle) return openSolve(await plan(actual, size, level))
@@ -190,7 +199,8 @@ export default function App() {
         <span className="scrub-hint" aria-hidden="true">Click, or drag sideways to set the time of day</span>
       </header>
       <main className={'view-' + view}>
-        {view === 'home' && <Home go={go} resume={!!puzzle} />}
+        {opening && <p className="opening" role="status">Opening the shared cube…</p>}
+        {view === 'home' && !opening && <Home go={go} resume={!!puzzle} />}
         {view === 'learn' && <Learn go={go} />}
         {view === 'input' && (
           <Input paint={paint} setPaint={setPaint} blank={BLANKS[paintSize]} onSubmit={submit} size={paintSize}

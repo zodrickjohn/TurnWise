@@ -28,6 +28,7 @@ export class Cube3D {
   private rig = new THREE.Group() // entrance, pointer tilt and victory spin; group inside handles face focus
   private tilt = { x: 0, y: 0, tx: 0, ty: 0 }
   private spinAt = -1
+  onFrame?: () => void // runs right after each render, while the canvas still holds the frame
   yaw = 0 // target turn of the whole cube, set from outside; eased toward each frame
   private yawNow = 0
   private onPointer?: (e: PointerEvent) => void
@@ -121,6 +122,7 @@ export class Cube3D {
       this.light()
       this.controls?.update()
       renderer.render(scene, camera)
+      this.onFrame?.()
     })
   }
 
