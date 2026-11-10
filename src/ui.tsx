@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type RefObject } from 'react'
+import { useEffect, useRef, useSyncExternalStore, type CSSProperties, type RefObject } from 'react'
 import Lenis from 'lenis'
 import { Cube3D } from './cube/Cube3D.ts'
 import { FACES, NAME, SOLVED, toMoves, type Face, type Size, type State } from './cube/model.ts'
@@ -37,6 +37,22 @@ export function load<T>(key: string, fallback: T): T {
 }
 export function save(key: string, value: unknown) {
   try { localStorage.setItem('turnwise.' + key, JSON.stringify(value)) } catch { /* storage unavailable */ }
+}
+
+// The browser's install offer (Chrome, Edge, Android), held for an Install button; iPhones install from the Share menu instead
+type Offer = Event & { prompt: () => Promise<void> }
+let offer: Offer | null = null
+const offerSubs = new Set<() => void>()
+const setOffer = (o: Offer | null) => { offer = o; offerSubs.forEach(f => f()) }
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); setOffer(e as Offer) })
+addEventListener('appinstalled', () => setOffer(null))
+const installed = matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true
+const iphone = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))
+export function Install() {
+  const o = useSyncExternalStore(f => (offerSubs.add(f), () => offerSubs.delete(f)), () => offer)
+  if (installed) return null
+  if (o) return <button className="btn white" onClick={() => o.prompt().finally(() => setOffer(null))}><Icon name="download" size={18} /> Install Turnwise</button>
+  return iphone ? <p className="install-tip">Add Turnwise to your home screen: tap <b>Share</b>, then <b>Add to Home Screen</b>. It works offline too.</p> : null
 }
 
 // Mounts a Cube3D into a div and exposes it through cubeRef
@@ -212,9 +228,10 @@ const ICONS: Record<string, string> = {
   undo: 'M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11',
   bulb: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z',
   search: 'M10.5 17a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13zM15.5 15.5L20 20',
+  download: 'M12 4v11M7 10.5l5 5 5-5M5 19.5h14',
 }
 export function Icon({ name, size = 22, className }: { name: keyof typeof ICONS | string; size?: number; className?: string }) {
-  const stroke = ['check', 'arrow', 'reset', 'close', 'camera', 'sun', 'moon', 'undo', 'bulb', 'search'].includes(name)
+  const stroke = ['check', 'arrow', 'reset', 'close', 'camera', 'sun', 'moon', 'undo', 'bulb', 'search', 'download'].includes(name)
   return (
     <svg className={className} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" fill={stroke ? 'none' : 'currentColor'} stroke={stroke ? 'currentColor' : 'none'} strokeWidth={stroke ? 2.6 : 0} strokeLinecap="round" strokeLinejoin="round">
       <path d={ICONS[name]} />

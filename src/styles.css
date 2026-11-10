@@ -517,6 +517,8 @@ button.big-st:active { transform: scale(0.88); }
 .practice-steps button:hover { transform: translate(calc(-2px * var(--lx)), -2px); box-shadow: var(--sh-sm); }
 .practice-steps button.on { background: var(--y); color: #000; --ink: #000; box-shadow: calc(4px * var(--lx)) 4px 0 var(--drop); transform: translate(calc(-2px * var(--lx)), -2px); }
 .practice-steps .mini { --m: 9px; }
+.cta-band .actions { margin-top: 0; align-items: center; }
+.install-tip { margin: 0; max-width: 40ch; font-size: 0.95rem; }
 .ps-title { font-weight: 700; font-size: 0.9rem; line-height: 1.25; }
 .ps-title b { font-family: var(--display); }
 .stars { display: inline-flex; gap: 3px; }

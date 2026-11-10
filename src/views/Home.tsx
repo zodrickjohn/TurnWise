@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { Cube3D } from '../cube/Cube3D.ts'
 import { SOLVED, move, scramble, toMoves } from '../cube/model.ts'
 import { STAGES, solve } from '../cube/solver.ts'
-import { CubeView, Icon, Tiles, faceColor, reduceMotion, revealOnScroll } from '../ui.tsx'
+import { CubeView, Icon, Install, Tiles, faceColor, reduceMotion, revealOnScroll } from '../ui.tsx'
 import { ScrollSolve, Showcase } from './HomeSections.tsx'
 import type { View } from '../App.tsx'
 import { Coach } from '../Coach.tsx'
@@ -94,7 +94,10 @@ export default function Home({ go, resume }: { go: (v: View) => void; resume: bo
       <section className="cta-band">
         <h2>Grab your cube.</h2>
         <p>Keep it next to you. Every move shows up on screen first, then you copy it.</p>
-        <button className="btn ink" onClick={() => go('learn')}>Start learning <Icon name="arrow" size={18} /></button>
+        <div className="actions">
+          <button className="btn ink" onClick={() => go('learn')}>Start learning <Icon name="arrow" size={18} /></button>
+          <Install />
+        </div>
       </section>
       <footer className="foot">Turnwise. Made for anyone holding a scrambled cube right now.</footer>
     </>
