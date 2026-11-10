@@ -21,6 +21,7 @@
   --ink: color-mix(in oklab, #000000, #f1f0ea calc(var(--flip) * 100%));
   --ink-2: color-mix(in oklab, #2a2e37, #b8bcc8 calc(var(--flip) * 100%));
   --w: #ffffff; --y: #ffd60a; --r: #f0302a; --o: #ff8a00; --g: #00c46a; --b: #2f6bff;
+  --b-ink: #285fe8; /* blue under white text: a shade darker for 4.5:1 contrast */
   --drop: color-mix(in oklab, #000000, #4a5066 calc(var(--flip) * 100%)); /* hard shadow color */
   --solid: color-mix(in oklab, #000000, #07080a calc(var(--t) * 100%));     /* black-plastic fills */
   --tint: color-mix(in oklab, #fff6c4, #3b3413 calc(var(--flip) * 100%));   /* soft yellow 'now' panels */
@@ -148,7 +149,7 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 24px 64px; }
 /* Home: hero */
 .hero {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 24px; margin-top: clamp(14px, 2.6svh, 28px);
-  padding: clamp(26px, 4svh, 48px) clamp(24px, 4.5vw, 64px); /* hugs its content: no empty bands above or below */ background: var(--b); color: #fff; border: var(--line); border-radius: 28px; box-shadow: calc(10px * var(--lx)) 10px 0 var(--drop);
+  padding: clamp(26px, 4svh, 48px) clamp(24px, 4.5vw, 64px); /* hugs its content: no empty bands above or below */ background: var(--b-ink); color: #fff; border: var(--line); border-radius: 28px; box-shadow: calc(10px * var(--lx)) 10px 0 var(--drop);
 }
 .hero h1 { font-size: clamp(1.9rem, min(4.4vw, 7.2svh), 4rem); line-height: 1.02; color: #fff; margin-bottom: clamp(10px, 2.4svh, 26px); }
 .hero .actions { margin-top: clamp(14px, 2.6svh, 26px); }
@@ -246,7 +247,7 @@ main { max-width: 1320px; margin: 0 auto; padding: 0 24px 64px; }
 .demo-sizes .levels span { padding: 3px 10px; border: 2.5px solid var(--ink); border-radius: 999px; font-size: 0.82rem; background: var(--card); }
 .t-learn { background: var(--y); }
 .t-practice { background: var(--g); }
-.t-scan { background: var(--b); --ink: #fff; --ink-2: #e6ecff; color: #fff; }
+.t-scan { background: var(--b-ink); --ink: #fff; --ink-2: #e6ecff; color: #fff; }
 .t-sky { background: #18204a; --ink: #fff; --ink-2: #c9d2f2; color: #fff; }
 .demo { height: 124px; display: grid; place-items: center; margin-bottom: 6px; }
 /* Learn: keys press in sequence */
